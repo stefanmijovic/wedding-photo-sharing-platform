@@ -1,0 +1,421 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <title>Andrijana❤️Ivan</title>
+        <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+        <meta content="" name="keywords" />
+        <meta content="" name="description" />
+
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link
+            href="https://fonts.googleapis.com/css2?family=Great+Vibes&family=Open+Sans:wght@400;500;600&family=Petit+Formal+Script&display=swap"
+            rel="stylesheet" />
+
+        <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.15.4/css/all.css" />
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.4.1/font/bootstrap-icons.css" rel="stylesheet" />
+
+        <link href="lib/animate/animate.min.css" rel="stylesheet" />
+
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/glightbox/dist/css/glightbox.min.css" />
+
+        <link href="css/bootstrap.min.css" rel="stylesheet" />
+
+        <link href="css/style.css" rel="stylesheet" />
+    </head>
+
+    <body data-bs-spy="scroll" data-bs-target="#navBar" id="weddingHome">
+        <div id="languageModal" class="language-modal">
+            <div class="language-modal-card">
+                <h2>Dobrodošli</h2>
+                <p>Willkommen / Welcome</p>
+
+                <div class="language-options">
+                    <button type="button" onclick="chooseLanguage('sr')">
+                        <span>🇷🇸</span>
+                        <strong>Srpski</strong>
+                    </button>
+
+                    <button type="button" onclick="chooseLanguage('de')">
+                        <span>🇩🇪</span>
+                        <strong>Deutsch</strong>
+                    </button>
+
+                    <button type="button" onclick="chooseLanguage('en')">
+                        <span>🇬🇧</span>
+                        <strong>English</strong>
+                    </button>
+                </div>
+            </div>
+        </div>
+        <div
+            id="spinner"
+            class="show w-100 vh-100 bg-white position-fixed translate-middle top-50 start-50 d-flex align-items-center justify-content-center">
+            <div class="spinner-grow text-primary" role="status"></div>
+        </div>
+        <div class="container-fluid sticky-top px-0">
+            <div class="container-fluid">
+                <div class="container px-0">
+                    <nav class="navbar navbar-light navbar-expand-xl" id="navBar">
+                        <a href="index.html" class="navbar-brand">
+                            <h4 class="text-primary display-6 fw-bold mb-0">
+                                Mrs<strong class="text-secondary">&</strong>Mr
+                            </h4>
+                        </a>
+                        <div class="d-flex align-items-center gap-2">
+                            <button
+                                type="button"
+                                onclick="openLanguageModal()"
+                                class="btn btn-light btn-sm language-btn">
+                                <span id="currentLanguageFlag">🌐</span>
+                            </button>
+
+                            <button
+                                class="navbar-toggler"
+                                type="button"
+                                data-bs-toggle="collapse"
+                                data-bs-target="#navbarCollapse">
+                                <span class="fa fa-bars"></span>
+                            </button>
+                        </div>
+                        <div class="collapse navbar-collapse py-3" id="navbarCollapse">
+                            <div class="navbar-nav mx-auto border-top">
+                                <a href="#weddingHome" class="nav-item nav-link active" data-i18n="nav_home">Početna</a>
+                                <a href="#weddingAbout" class="nav-item nav-link" data-i18n="nav_couple">Mladenci</a>
+                                <a href="#weddingCountdown" class="nav-item nav-link" data-i18n="nav_countdown"
+                                    >Odbrojavanje</a
+                                >
+                                <a
+                                    href="#"
+                                    onclick="openGallerySection(event)"
+                                    class="nav-item nav-link"
+                                    data-i18n="nav_gallery">
+                                    Galerija
+                                </a>
+                            </div>
+                        </div>
+                    </nav>
+                </div>
+            </div>
+        </div>
+        <div class="container-fluid carousel-header px-0">
+            <div id="carouselId" class="carousel slide" data-bs-ride="carousel">
+                <ol class="carousel-indicators">
+                    <li data-bs-target="#carouselId" data-bs-slide-to="0" class="active"></li>
+                    <li data-bs-target="#carouselId" data-bs-slide-to="1"></li>
+                    <li data-bs-target="#carouselId" data-bs-slide-to="2"></li>
+                </ol>
+                <div class="carousel-inner" role="listbox">
+                    <div class="carousel-item active">
+                        <img src="img/carousel-1.jpg" class="img-fluid" alt="Image" />
+                        <div class="carousel-caption">
+                            <div class="p-3 mx-auto animated zoomIn" style="max-width: 900px">
+                                <div
+                                    class="d-inline-block border-end-0 border-start-0 border-secondary p-2 mb-4"
+                                    style="border-style: double">
+                                    <h4
+                                        class="text-white text-uppercase fw-bold mb-0"
+                                        style="letter-spacing: 3px"
+                                        data-i18n="welcome">
+                                        Dobrodošli na naše venčanje
+                                    </h4>
+                                </div>
+                                <h1 class="display-1 text-capitalize text-white mb-3">
+                                    Andrijana <i class="fa fa-heart text-primary"></i> Ivan
+                                </h1>
+                                <div
+                                    class="d-inline-block border-end-0 border-start-0 border-secondary p-2 mb-5"
+                                    style="border-style: double">
+                                    <h4 class="text-white text-uppercase fw-bold mb-0" style="letter-spacing: 3px">
+                                        10.10.2026.
+                                    </h4>
+                                </div>
+                                <div class="d-flex align-items-center justify-content-center">
+                                    <a
+                                        onclick="openUpload()"
+                                        class="btn btn-primary btn-primary-outline-0 wedding-btn"
+                                        href="#"
+                                        data-i18n="add_memories">
+                                        Dodaj uspomene
+                                    </a>
+                                </div>
+
+                                <div class="d-flex align-items-center justify-content-center mt-3">
+                                    <a
+                                        class="btn btn-primary btn-primary-outline-0 wedding-btn"
+                                        href="#"
+                                        onclick="openGallerySection(event)"
+                                        data-i18n="gallery_button">
+                                        Galerija
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="carousel-item">
+                        <img src="img/carousel-2.jpg" class="img-fluid" alt="Image" />
+                        <div class="carousel-caption">
+                            <div class="p-3 mx-auto animated zoomIn" style="max-width: 900px">
+                                <div
+                                    class="d-inline-block border-end-0 border-start-0 border-secondary p-2 mb-5"
+                                    style="border-style: double">
+                                    <h4
+                                        class="text-white text-uppercase fw-bold mb-0"
+                                        style="letter-spacing: 3px"
+                                        data-i18n="welcome">
+                                        Dobrodošli na naše venčanje
+                                    </h4>
+                                </div>
+                                <h1 class="display-1 text-capitalize text-white mb-3">
+                                    Andrijana <i class="fa fa-heart text-primary"></i> Ivan
+                                </h1>
+                                <div
+                                    class="d-inline-block border-end-0 border-start-0 border-secondary p-2 mb-5"
+                                    style="border-style: double">
+                                    <h4 class="text-white text-uppercase fw-bold mb-0" style="letter-spacing: 3px">
+                                        10.10.2026.
+                                    </h4>
+                                </div>
+                                <div class="d-flex align-items-center justify-content-center">
+                                    <a
+                                        onclick="openUpload()"
+                                        class="btn btn-primary btn-primary-outline-0 wedding-btn"
+                                        href="#"
+                                        data-i18n="add_memories">
+                                        Dodaj uspomene
+                                    </a>
+                                </div>
+
+                                <div class="d-flex align-items-center justify-content-center mt-3">
+                                    <a
+                                        class="btn btn-primary btn-primary-outline-0 wedding-btn"
+                                        href="#"
+                                        onclick="openGallerySection(event)"
+                                        data-i18n="gallery_button">
+                                        Galerija
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="carousel-item">
+                        <img src="img/carousel-3.png" class="img-fluid bg-secondary" alt="Image" />
+                        <div class="carousel-caption">
+                            <div class="p-3 mx-auto animated zoomIn" style="max-width: 900px">
+                                <div
+                                    class="d-inline-block border-end-0 border-start-0 border-secondary p-2 mb-4"
+                                    style="border-style: double">
+                                    <h4
+                                        class="text-white text-uppercase fw-bold mb-0"
+                                        style="letter-spacing: 3px"
+                                        data-i18n="welcome">
+                                        Dobrodošli na naše venčanje
+                                    </h4>
+                                </div>
+                                <h1 class="display-1 text-capitalize text-white mb-3">
+                                    Andrijana <i class="fa fa-heart text-primary"></i> Ivan
+                                </h1>
+                                <div
+                                    class="d-inline-block border-end-0 border-start-0 border-secondary p-2 mb-5"
+                                    style="border-style: double">
+                                    <h4 class="text-white text-uppercase fw-bold mb-0" style="letter-spacing: 3px">
+                                        10.10.2026.
+                                    </h4>
+                                </div>
+                                <div class="d-flex align-items-center justify-content-center">
+                                    <a
+                                        onclick="openUpload()"
+                                        class="btn btn-primary btn-primary-outline-0 wedding-btn"
+                                        href="#"
+                                        data-i18n="add_memories">
+                                        Dodaj uspomene
+                                    </a>
+                                </div>
+
+                                <div class="d-flex align-items-center justify-content-center mt-3">
+                                    <a
+                                        class="btn btn-primary btn-primary-outline-0 wedding-btn"
+                                        href="#"
+                                        onclick="openGallerySection(event)"
+                                        data-i18n="gallery_button">
+                                        Galerija
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <button class="carousel-control-prev" type="button" data-bs-target="#carouselId" data-bs-slide="prev">
+                    <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+                    <span class="visually-hidden" data-i18n="previous">Prethodna</span>
+                </button>
+                <button class="carousel-control-next" type="button" data-bs-target="#carouselId" data-bs-slide="next">
+                    <span class="carousel-control-next-icon" aria-hidden="true"></span>
+                    <span class="visually-hidden" data-i18n="next">Sledeća</span>
+                </button>
+            </div>
+        </div>
+        <div class="container-fluid position-relative py-5" id="weddingAbout">
+            <div class="position-absolute" style="top: -35px; right: 0">
+                <img src="img/tamp-bg-1.png" class="img-fluid" alt="" />
+            </div>
+            <div class="position-absolute" style="top: -10px; left: 0; transform: rotate(150deg)">
+                <img src="img/tamp-bg-1.png" class="img-fluid" alt="" />
+            </div>
+            <div class="container position-relative py-5">
+                <div class="mx-auto text-center mb-5 wow fadeInUp" data-wow-delay="0.1s" style="max-width: 800">
+                    <h1 class="text-primary display-1" data-i18n="dear_guests">Dragi naši,</h1>
+                    <h4 class="text-dark mb-0" data-i18n="dear_guests_text">
+                        Zadovoljstvo nam je da današnji dan podelimo sa vama
+                    </h4>
+                </div>
+                <div class="row">
+                    <div class="col-lg-12">
+                        <div class="row g-4 align-items-center">
+                            <div class="col-lg-5 wow fadeInUp" data-wow-delay="0.3s">
+                                <div class="d-flex">
+                                    <div class="text-center my-auto p-0">
+                                        <h3 class="text-primary mb-3">Andrijana</h3>
+                                        <p class="text-dark mb-0" style="line-height: 30px" data-i18n="bride_text">
+                                            Lorem Ipsum is simply dummy text of the printing and typesetting industry.
+                                            Lorem Ipsum has been the industry's standard dummy
+                                        </p>
+                                    </div>
+                                    <img src="img/bride.jpg" class="img-fluid img-border" alt="" />
+                                </div>
+                            </div>
+                            <div class="col-lg-2 wow fadeIn" data-wow-delay="0.5s">
+                                <div class="d-flex align-items-center justify-content-center">
+                                    <i class="fa fa-heart fa-5x text-primary"></i>
+                                </div>
+                            </div>
+                            <div class="col-lg-5 wow fadeInUp" data-wow-delay="0.3s">
+                                <div class="d-flex">
+                                    <img src="img/Groom.jpg" class="img-fluid img-border" alt="" />
+                                    <div class="my-auto ps-4">
+                                        <h3 class="text-primary mb-3">Ivan</h3>
+                                        <p class="text-dark mb-0" style="line-height: 30px" data-i18n="groom_text">
+                                            Lorem Ipsum is simply dummy text of the printing and typesetting industry.
+                                            Lorem Ipsum has been the industry's standard dummy
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="container-fluid wedding-date-bg position-relative py-5" id="weddingCountdown">
+            <div class="position-absolute" style="top: -100px; right: 0">
+                <img src="img/tamp-bg-1.png" class="img-fluid" alt="" />
+            </div>
+
+            <div class="position-absolute" style="top: -80px; left: 0; transform: rotate(150deg)">
+                <img src="img/tamp-bg-1.png" class="img-fluid" alt="" />
+            </div>
+
+            <div class="container py-5 wow zoomIn" data-wow-delay="0.1s">
+                <div
+                    class="wedding-date text-center bg-light p-5"
+                    style="border-style: double !important; border: 15px solid rgba(253, 93, 93, 0.5)">
+                    <div class="wedding-date-content">
+                        <div
+                            class="d-inline-block border-end-0 border-start-0 border-secondary p-2 mb-4"
+                            style="border-style: double">
+                            <h4 class="text-dark text-uppercase fw-bold mb-0" style="letter-spacing: 3px">
+                                10.10.2026.
+                            </h4>
+                        </div>
+
+                        <h1 class="display-5 mb-5" data-i18n="countdown_title">Odbrojavanje</h1>
+
+                        <div id="countdown-section">
+                            <div class="countdown-wrapper">
+                                <div class="countdown-box">
+                                    <div id="days">00</div>
+                                    <span data-i18n="days">Dana</span>
+                                </div>
+
+                                <div class="countdown-box">
+                                    <div id="hours">00</div>
+                                    <span data-i18n="hours">Sati</span>
+                                </div>
+
+                                <div class="countdown-box">
+                                    <div id="minutes">00</div>
+                                    <span data-i18n="minutes">Minuta</span>
+                                </div>
+
+                                <div class="countdown-box">
+                                    <div id="seconds">00</div>
+                                    <span data-i18n="seconds">Sekundi</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div
+                class="position-absolute"
+                style="top: 15%; right: -30px; transform: rotate(320deg); opacity: 0.5; z-index: 1">
+                <img src="img/attendance-bg.png" class="img-fluid" alt="" />
+            </div>
+
+            <div
+                class="position-absolute"
+                style="top: 15%; left: -10px; transform: rotate(-320deg); opacity: 0.5; z-index: 1">
+                <img src="img/attendance-bg.png" class="img-fluid" alt="" />
+            </div>
+        </div>
+        <!-- Gallery Start -->
+        <div class="container-fluid py-5" id="weddingGallery">
+            <div class="container">
+                <div class="text-center mx-auto pb-5" style="max-width: 800px">
+                    <h1 class="display-2 text-dark" data-i18n="gallery_title">Galerija uspomena</h1>
+
+                    <p class="fs-5 text-dark" data-i18n="gallery_text">
+                        Podelite i pregledajte najlepše trenutke sa našeg venčanja ❤️
+                    </p>
+                </div>
+
+                <!-- JavaScript automatski ubacuje slike ovde -->
+
+                <div class="photo-grid"></div>
+            </div>
+        </div>
+        <!-- Gallery End -->
+        <div class="container-fluid copyright py-4">
+            <div class="container">
+                <div class="row g-4 align-items-center">
+                    <div class="col-md-6 text-center text-md-start mb-md-0">
+                        <span class="text-light"
+                            ><a href="#"><i class="fas fa-copyright text-light me-2"></i>Stefan Mijović</a>, All right
+                            reserved.</span
+                        >
+                    </div>
+                    <div class="col-md-6 text-center text-md-end text-white"></div>
+                </div>
+            </div>
+        </div>
+        <a href="#" class="btn btn-primary btn-primary-outline-0 btn-md-square back-to-top"
+            ><i class="fa fa-arrow-up"></i
+        ></a>
+
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.4/jquery.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0/dist/js/bootstrap.bundle.min.js"></script>
+        <script src="lib/wow/wow.min.js"></script>
+        <script src="lib/easing/easing.min.js"></script>
+        <script src="lib/waypoints/waypoints.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/glightbox/dist/js/glightbox.min.js"></script>
+        <script src="js/translations.js"></script>
+        <script src="js/language.js"></script>
+
+        <script src="js/countdown.js"></script>
+        <script src="js/upload.js"></script>
+
+        <script src="js/main.js"></script>
+    </body>
+</html>
