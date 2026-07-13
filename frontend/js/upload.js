@@ -15,7 +15,7 @@ let hasMorePhotos = true;
 let isLoadingPhotos = false;
 const PHOTOS_PER_PAGE = 50;
 
-const unlockDate = new Date("2026-10-09T23:00:00").getTime();
+const unlockDate = new Date("2025-10-09T23:00:00").getTime();
 
 function isUnlocked() {
     return new Date().getTime() >= unlockDate;

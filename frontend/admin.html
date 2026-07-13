@@ -1,71 +1,63 @@
 <!doctype html>
 <html lang="sr">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin galerija</title>
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Admin galerija</title>
 
-    <link href="css/bootstrap.min.css" rel="stylesheet">
-    <link href="css/admin.css" rel="stylesheet">
-</head>
+        <link href="css/bootstrap.min.css" rel="stylesheet" />
+        <link href="css/admin.css" rel="stylesheet" />
+    </head>
 
-<body>
+    <body>
+        <div class="container py-5">
+            <div class="admin-header">
+                <div>
+                    <h1>Admin galerija</h1>
+                    <p>Pregled, statistika, odobravanje, sakrivanje i brisanje fotografija i video snimaka.</p>
+                </div>
 
-<div class="container py-5">
+                <div class="admin-actions">
+                    <a href="/api/admin/download/photos" class="btn btn-success"> 📦 Preuzmi fotografije </a>
 
-    <div class="admin-header">
-        <div>
-            <h1>Admin galerija</h1>
-            <p>Pregled, statistika, odobravanje, sakrivanje i brisanje fotografija.</p>
+                    <a href="/api/admin/download/videos" class="btn btn-primary"> 🎬 Preuzmi snimke </a>
+
+                    <button class="btn btn-dark" onclick="refreshAdmin()">Osveži</button>
+
+                    <button class="btn btn-outline-danger" onclick="logout()">Log out</button>
+                </div>
+            </div>
+
+            <div class="stats-grid mb-4">
+                <div class="stat-card">
+                    <span>Ukupno fajlova</span>
+                    <strong id="statTotal">0</strong>
+                </div>
+
+                <div class="stat-card">
+                    <span>Odobreno</span>
+                    <strong id="statApproved">0</strong>
+                </div>
+
+                <div class="stat-card stat-card-pending">
+                    <span>Na pregledu</span>
+                    <strong id="statPending">0</strong>
+                </div>
+
+                <div class="stat-card">
+                    <span>Sakriveno</span>
+                    <strong id="statHidden">0</strong>
+                </div>
+
+                <div class="stat-card">
+                    <span>Preuzimanja</span>
+                    <strong id="statDownloads">0</strong>
+                </div>
+            </div>
+
+            <div id="adminGallery" class="admin-grid"></div>
         </div>
 
-        <div class="admin-actions">
-            <a href="/api/admin/download/photos" class="btn btn-success">
-                📦 Preuzmi fotografije
-            </a>
-
-            <a href="/api/admin/download/videos" class="btn btn-primary">
-                🎬 Preuzmi snimke
-            </a>
-
-            <button class="btn btn-dark" onclick="refreshAdmin()">
-                Osveži
-            </button>
-        </div>
-    </div>
-
-    <div class="stats-grid mb-4">
-        <div class="stat-card">
-            <span>Ukupno fotografija</span>
-            <strong id="statTotal">0</strong>
-        </div>
-
-        <div class="stat-card">
-            <span>Odobreno</span>
-            <strong id="statApproved">0</strong>
-        </div>
-
-        <div class="stat-card stat-card-pending">
-            <span>Na pregledu</span>
-            <strong id="statPending">0</strong>
-        </div>
-
-        <div class="stat-card">
-            <span>Sakriveno</span>
-            <strong id="statHidden">0</strong>
-        </div>
-
-        <div class="stat-card">
-            <span>Preuzimanja</span>
-            <strong id="statDownloads">0</strong>
-        </div>
-    </div>
-
-    <div id="adminGallery" class="admin-grid"></div>
-
-</div>
-
-<script src="js/admin.js"></script>
-
-</body>
+        <script src="js/admin.js"></script>
+    </body>
 </html>

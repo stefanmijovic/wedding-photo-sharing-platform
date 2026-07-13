@@ -10,6 +10,15 @@ import Database from "better-sqlite3";
 import { execFile } from "child_process";
 import { moderateImage } from "./moderation.js";
 import { createRequire } from "module";
+import bcrypt from "bcrypt";
+import session from "express-session";
+
+declare module "express-session" {
+    interface SessionData {
+        adminId?: number;
+        username?: string;
+    }
+}
 
 const require = createRequire(import.meta.url);
 const archiver = require("archiver");
@@ -22,8 +31,8 @@ app.disable("x-powered-by");
 
 const PORT = Number(process.env.PORT) || 3000;
 
-const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "admin@example.com";
-const ADMIN_PANEL_URL = process.env.ADMIN_PANEL_URL || "/admin.html";
+const ADMIN_EMAIL = "crnobradi92@gmail.com";
+const ADMIN_PANEL_URL = "http://192.168.3.222/admin.html";
 
 function sendPendingReviewEmail(photoId: number, filename: string) {
     const subject = "Wedding app: fotografija čeka pregled";
@@ -40,18 +49,14 @@ ${ADMIN_PANEL_URL}
 Ovo je automatska poruka.
 `;
 
-    const mailProcess = execFile(
-        "mail",
-        ["-s", subject, ADMIN_EMAIL],
-        (error) => {
-            if (error) {
-                console.error("Greška pri slanju email notifikacije:", error);
-                return;
-            }
-
-            console.log("Email notifikacija poslata za pending_review:", photoId);
+    const mailProcess = execFile("mail", ["-s", subject, ADMIN_EMAIL], (error) => {
+        if (error) {
+            console.error("Greška pri slanju email notifikacije:", error);
+            return;
         }
-    );
+
+        console.log("Email notifikacija poslata za pending_review:", photoId);
+    });
 
     mailProcess.stdin?.write(body);
     mailProcess.stdin?.end();
@@ -59,25 +64,51 @@ Ovo je automatska poruka.
 
 app.set("trust proxy", 1);
 
-app.use(cors({
-    origin: [
-        "https://ivaniandrijana.cloud",
-        "https://www.ivaniandrijana.cloud",
-        "http://localhost",
-        "http://localhost:3000"
-    ],
-    methods: ["GET", "POST", "PATCH", "DELETE"],
-    credentials: false
-}));
+app.use(
+    cors({
+        origin: [
+            "https://ivaniandrijana.cloud",
+            "https://www.ivaniandrijana.cloud",
+            "http://localhost",
+            "http://localhost:3000"
+        ],
+        methods: ["GET", "POST", "PATCH", "DELETE"],
+        credentials: true
+    })
+);
 
 app.use(express.json());
+app.use(
+    session({
+        name: "wedding_admin_sid",
+        secret: process.env.SESSION_SECRET || "change-this-secret-before-production",
+        resave: false,
+        saveUninitialized: false,
+        cookie: {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+            sameSite: "lax",
+            maxAge: 1000 * 60 * 60 * 12
+        }
+    })
+);
 
 const uploadLimiter = rateLimit({
     windowMs: 60 * 1000,
-    max: 30,
+    max: 200,
     message: {
         error: "Previše zahteva. Pokušajte ponovo kasnije."
     }
+});
+
+const adminLoginLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 5,
+    message: {
+        error: "Previše pokušaja prijave. Pokušajte ponovo za 15 minuta."
+    },
+    standardHeaders: true,
+    legacyHeaders: false
 });
 
 const uploadFolderOriginal = path.join(__dirname, "../../uploads/original");
@@ -128,8 +159,8 @@ db.exec(`
 
 const existingColumns = db.prepare(`PRAGMA table_info(photos)`).all() as { name: string }[];
 
-const hasAiScore = existingColumns.some(col => col.name === "ai_score");
-const hasAiReason = existingColumns.some(col => col.name === "ai_reason");
+const hasAiScore = existingColumns.some((col) => col.name === "ai_score");
+const hasAiReason = existingColumns.some((col) => col.name === "ai_reason");
 
 if (!hasAiScore) {
     db.exec(`ALTER TABLE photos ADD COLUMN ai_score INTEGER NOT NULL DEFAULT 0`);
@@ -139,9 +170,7 @@ if (!hasAiReason) {
     db.exec(`ALTER TABLE photos ADD COLUMN ai_reason TEXT NOT NULL DEFAULT ''`);
 }
 
-const hasMediaType = existingColumns.some(
-    col => col.name === "media_type"
-);
+const hasMediaType = existingColumns.some((col) => col.name === "media_type");
 
 if (!hasMediaType) {
     db.exec(`
@@ -150,9 +179,7 @@ if (!hasMediaType) {
     `);
 }
 
-const hasWebUrl = existingColumns.some(
-    col => col.name === "web_url"
-);
+const hasWebUrl = existingColumns.some((col) => col.name === "web_url");
 
 if (!hasWebUrl) {
     db.exec(`
@@ -163,9 +190,7 @@ if (!hasWebUrl) {
     console.log("Dodata kolona web_url");
 }
 
-const hasLikes = existingColumns.some(
-    col => col.name === "likes"
-);
+const hasLikes = existingColumns.some((col) => col.name === "likes");
 
 if (!hasLikes) {
     db.exec(`
@@ -186,6 +211,42 @@ db.exec(`
     );
 `);
 
+db.exec(`
+    CREATE TABLE IF NOT EXISTS admins (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT NOT NULL UNIQUE,
+        password_hash TEXT NOT NULL,
+        created_at TEXT NOT NULL
+    );
+`);
+
+const adminExists = db
+    .prepare(
+        `
+    SELECT id
+    FROM admins
+    WHERE username = ?
+`
+    )
+    .get("admin");
+
+if (!adminExists) {
+    const passwordHash = bcrypt.hashSync("PromeniMe123!", 12);
+
+    db.prepare(
+        `
+        INSERT INTO admins (
+            username,
+            password_hash,
+            created_at
+        )
+        VALUES (?, ?, ?)
+    `
+    ).run("admin", passwordHash, new Date().toISOString());
+
+    console.log("Kreiran podrazumevani administrator.");
+}
+
 app.use("/uploads", express.static(path.join(__dirname, "../../uploads")));
 
 const storage = multer.diskStorage({
@@ -199,27 +260,28 @@ const storage = multer.diskStorage({
     },
     filename: (req, file, cb) => {
         const uniqueName =
-            Date.now() +
-            "-" +
-            Math.round(Math.random() * 1e9) +
-            path.extname(file.originalname).toLowerCase();
+            Date.now() + "-" + Math.round(Math.random() * 1e9) + path.extname(file.originalname).toLowerCase();
 
         cb(null, uniqueName);
     }
 });
 
 const fileFilter = (req: any, file: Express.Multer.File, cb: Function) => {
-    if (
-        file.mimetype.startsWith("image/") ||
-        file.mimetype.startsWith("video/")
-    ) {
+    const allowedImageExtensions = [".jpg", ".jpeg", ".png", ".webp", ".gif"];
+    const allowedVideoExtensions = [".mp4", ".mov", ".webm", ".avi", ".mkv"];
+
+    const ext = path.extname(file.originalname).toLowerCase();
+
+    const isImage = file.mimetype.startsWith("image/") && allowedImageExtensions.includes(ext);
+
+    const isVideo = file.mimetype.startsWith("video/") && allowedVideoExtensions.includes(ext);
+
+    if (isImage || isVideo) {
         cb(null, true);
-    } else {
-        cb(
-            new Error("Dozvoljene su samo slike i video fajlovi"),
-            false
-        );
+        return;
     }
+
+    cb(new Error("Dozvoljene su samo slike i video fajlovi"), false);
 };
 
 const upload = multer({
@@ -243,20 +305,12 @@ function runAiModerationQueued(filePath: string) {
 
         const result = await moderateImage(filePath);
 
-        console.log(
-            "AI queue završena:",
-            jobId,
-            path.basename(filePath),
-            result.status,
-            result.aiScore
-        );
+        console.log("AI queue završena:", jobId, path.basename(filePath), result.status, result.aiScore);
 
         return result;
     });
 
-    aiQueue = job
-        .then(() => undefined)
-        .catch(() => undefined);
+    aiQueue = job.then(() => undefined).catch(() => undefined);
 
     return job;
 }
@@ -264,88 +318,48 @@ function runAiModerationQueued(filePath: string) {
 let videoQueue = Promise.resolve();
 
 function enqueueVideoJob(job: () => Promise<void>) {
-    videoQueue = videoQueue
-        .then(job)
-        .catch((error) => {
-            console.error("Video queue greška:", error);
-        });
+    videoQueue = videoQueue.then(job).catch((error) => {
+        console.error("Video queue greška:", error);
+    });
 
     return videoQueue;
 }
 
 function runNiceFfmpeg(args: string[]) {
     return new Promise<void>((resolve, reject) => {
-        execFile(
-            "nice",
-            ["-n", "10", "ffmpeg", ...args],
-            (error) => {
-                if (error) {
-                    reject(error);
-                    return;
-                }
-
-                resolve();
+        execFile("nice", ["-n", "10", "ffmpeg", ...args], (error) => {
+            if (error) {
+                reject(error);
+                return;
             }
-        );
+
+            resolve();
+        });
     });
 }
 
 let videoJobCounter = 0;
 
-function processVideoInBackground(
-    photoId: number,
-    filePath: string,
-    filename: string
-) {
+function processVideoInBackground(photoId: number, filePath: string, filename: string) {
     const jobId = ++videoJobCounter;
 
-    console.log(
-        "VIDEO QUEUE ČEKA:",
-        jobId,
-        photoId,
-        filename
-    );
+    console.log("VIDEO QUEUE ČEKA:", jobId, photoId, filename);
 
     enqueueVideoJob(async () => {
+        console.log("VIDEO QUEUE POČINJE:", jobId, photoId, filename);
 
-        console.log(
-            "VIDEO QUEUE POČINJE:",
-            jobId,
-            photoId,
-            filename
-        );
+        await processVideoJob(photoId, filePath, filename);
 
-        await processVideoJob(
-            photoId,
-            filePath,
-            filename
-        );
-
-        console.log(
-            "VIDEO QUEUE ZAVRŠENA:",
-            jobId,
-            photoId,
-            filename
-        );
+        console.log("VIDEO QUEUE ZAVRŠENA:", jobId, photoId, filename);
     });
 }
 
-async function processVideoJob(
-    photoId: number,
-    filePath: string,
-    filename: string
-) {
+async function processVideoJob(photoId: number, filePath: string, filename: string) {
     const videoThumbName = filename + ".jpg";
-    const videoThumbPath = path.join(
-        uploadFolderVideosThumbs,
-        videoThumbName
-    );
+    const videoThumbPath = path.join(uploadFolderVideosThumbs, videoThumbName);
 
     const webVideoName = filename;
-    const webVideoPath = path.join(
-        uploadFolderVideosWeb,
-        webVideoName
-    );
+    const webVideoPath = path.join(uploadFolderVideosWeb, webVideoName);
 
     const thumbUrl = `/uploads/videos/thumbs/${videoThumbName}`;
     const webUrl = `/uploads/videos/web/${webVideoName}`;
@@ -354,42 +368,62 @@ async function processVideoJob(
 
     await runNiceFfmpeg([
         "-y",
-        "-i", filePath,
-        "-ss", "00:00:01",
-        "-vframes", "1",
-        "-vf", "scale=400:400:force_original_aspect_ratio=increase,crop=400:400",
+        "-i",
+        filePath,
+        "-ss",
+        "00:00:01",
+        "-vframes",
+        "1",
+        "-vf",
+        "scale=400:400:force_original_aspect_ratio=increase,crop=400:400",
         videoThumbPath
     ]);
 
     await runNiceFfmpeg([
         "-y",
-        "-i", filePath,
-        "-vf", "scale='min(1280,iw)':-2",
-        "-c:v", "libx264",
-        "-preset", "fast",
-        "-crf", "28",
-        "-movflags", "+faststart",
-        "-c:a", "aac",
-        "-b:a", "128k",
-        "-threads", "2",
+        "-i",
+        filePath,
+        "-vf",
+        "scale='min(1280,iw)':-2",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "fast",
+        "-crf",
+        "28",
+        "-movflags",
+        "+faststart",
+        "-c:a",
+        "aac",
+        "-b:a",
+        "128k",
+        "-threads",
+        "2",
         webVideoPath
     ]);
 
-    db.prepare(`
+    db.prepare(
+        `
         UPDATE photos
         SET
             thumb_url = ?,
             web_url = ?,
             ai_reason = ?
         WHERE id = ?
-    `).run(
-        thumbUrl,
-        webUrl,
-        "Video fajl - web verzija spremna, ručni pregled potreban",
-        photoId
-    );
+    `
+    ).run(thumbUrl, webUrl, "Video fajl - web verzija spremna, ručni pregled potreban", photoId);
 
     console.log("Queued video obrada završena:", photoId);
+}
+
+function requireAdmin(req: express.Request, res: express.Response, next: express.NextFunction) {
+    if (!req.session.adminId) {
+        return res.status(401).json({
+            error: "Unauthorized"
+        });
+    }
+
+    next();
 }
 
 app.post("/api/upload", uploadLimiter, upload.single("photo"), async (req, res) => {
@@ -401,7 +435,10 @@ app.post("/api/upload", uploadLimiter, upload.single("photo"), async (req, res) 
         });
     }
 
-    const isVideo = file.mimetype.startsWith("video/");
+    const ext = path.extname(file.originalname).toLowerCase();
+
+    const isVideo = file.mimetype.startsWith("video/") || [".mp4", ".mov", ".webm", ".avi", ".mkv"].includes(ext);
+
     const mediaType = isVideo ? "video" : "image";
 
     console.log("Fajl primljen:", file.filename, mediaType);
@@ -422,7 +459,6 @@ app.post("/api/upload", uploadLimiter, upload.single("photo"), async (req, res) 
             status = "pending_review";
             aiScore = 0;
             aiReason = "Video fajl - obrada u toku, ručni pregled potreban";
-
         } else {
             const thumbPath = path.join(uploadFolderThumbs, file.filename);
 
@@ -445,14 +481,16 @@ app.post("/api/upload", uploadLimiter, upload.single("photo"), async (req, res) 
             originalUrl = `/uploads/original/${file.filename}`;
             thumbUrl = `/uploads/thumbs/${file.filename}`;
 
-	    const moderation = await runAiModerationQueued(file.path);	    
+            const moderation = await runAiModerationQueued(file.path);
 
             status = moderation.status;
             aiScore = moderation.aiScore;
             aiReason = moderation.aiReason;
         }
 
-        const insertResult = db.prepare(`
+        const insertResult = db
+            .prepare(
+                `
             INSERT INTO photos (
                 filename,
                 original_url,
@@ -464,17 +502,19 @@ app.post("/api/upload", uploadLimiter, upload.single("photo"), async (req, res) 
                 media_type,
                 web_url
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).run(
-            file.filename,
-            originalUrl,
-            thumbUrl,
-            status,
-            new Date().toISOString(),
-            aiScore,
-            aiReason,
-            mediaType,
-            webUrl
-        );
+        `
+            )
+            .run(
+                file.filename,
+                originalUrl,
+                thumbUrl,
+                status,
+                new Date().toISOString(),
+                aiScore,
+                aiReason,
+                mediaType,
+                webUrl
+            );
 
         const insertedId = Number(insertResult.lastInsertRowid);
 
@@ -483,11 +523,7 @@ app.post("/api/upload", uploadLimiter, upload.single("photo"), async (req, res) 
         }
 
         if (isVideo) {
-            processVideoInBackground(
-                insertedId,
-                file.path,
-                file.filename
-            );
+            processVideoInBackground(insertedId, file.path, file.filename);
         }
 
         res.json({
@@ -501,15 +537,36 @@ app.post("/api/upload", uploadLimiter, upload.single("photo"), async (req, res) 
             webUrl,
             status
         });
-
     } catch (error) {
         console.error("Greška pri obradi fajla:", error);
 
-        try {
-            fs.unlinkSync(file.path);
-        } catch {}
+        const cleanupPaths = [file.path, file.path + ".fixed", path.join(uploadFolderThumbs, file.filename)];
 
-        res.status(500).json({
+        for (const cleanupPath of cleanupPaths) {
+            try {
+                if (fs.existsSync(cleanupPath)) {
+                    fs.unlinkSync(cleanupPath);
+                }
+            } catch (cleanupError) {
+                console.error("Greška pri brisanju neuspelog fajla:", cleanupPath, cleanupError);
+            }
+        }
+
+        const errorMessage = error instanceof Error ? error.message.toLowerCase() : "";
+
+        const invalidMedia =
+            errorMessage.includes("unsupported image format") ||
+            errorMessage.includes("input file") ||
+            errorMessage.includes("invalid") ||
+            errorMessage.includes("corrupt");
+
+        if (invalidMedia) {
+            return res.status(400).json({
+                error: "Fajl nije validna ili podržana slika."
+            });
+        }
+
+        return res.status(500).json({
             error: "Greška pri obradi fajla."
         });
     }
@@ -520,7 +577,9 @@ app.get("/api/photos", (req, res) => {
     const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 100);
     const offset = (page - 1) * limit;
 
-    const photos = db.prepare(`
+    const photos = db
+        .prepare(
+            `
 	SELECT
     id,
     filename,
@@ -535,13 +594,19 @@ app.get("/api/photos", (req, res) => {
         ORDER BY uploaded_at DESC
         LIMIT ?
         OFFSET ?
-    `).all(limit, offset);
+    `
+        )
+        .all(limit, offset);
 
-    const total = db.prepare(`
+    const total = db
+        .prepare(
+            `
         SELECT COUNT(*) AS count
         FROM photos
         WHERE status = 'approved'
-    `).get() as { count: number };
+    `
+        )
+        .get() as { count: number };
 
     res.json({
         photos,
@@ -555,7 +620,9 @@ app.get("/api/photos", (req, res) => {
 app.get("/api/photos/:id/download", (req, res) => {
     const id = Number(req.params.id);
 
-    const photo = db.prepare(`
+    const photo = db
+        .prepare(
+            `
  SELECT
         id,
         filename,
@@ -563,11 +630,15 @@ app.get("/api/photos/:id/download", (req, res) => {
     FROM photos
     WHERE id = ?
     AND status = 'approved'
-`).get(id) as {
-    id: number;
-    filename: string;
-    mediaType: string;
-} | undefined;
+`
+        )
+        .get(id) as
+        | {
+              id: number;
+              filename: string;
+              mediaType: string;
+          }
+        | undefined;
 
     if (!photo) {
         return res.status(404).json({
@@ -575,12 +646,10 @@ app.get("/api/photos/:id/download", (req, res) => {
         });
     }
 
-const filePath = path.join(
-    photo.mediaType === "video"
-        ? uploadFolderVideosOriginal
-        : uploadFolderOriginal,
-    photo.filename
-);
+    const filePath = path.join(
+        photo.mediaType === "video" ? uploadFolderVideosOriginal : uploadFolderOriginal,
+        photo.filename
+    );
 
     if (!fs.existsSync(filePath)) {
         return res.status(404).json({
@@ -588,16 +657,15 @@ const filePath = path.join(
         });
     }
 
-    db.prepare(`
+    db.prepare(
+        `
         UPDATE photos
         SET downloads = downloads + 1
         WHERE id = ?
-    `).run(id);
+    `
+    ).run(id);
 
-    return res.download(
-        filePath,
-        photo.filename
-    );
+    return res.download(filePath, photo.filename);
 });
 
 app.post("/api/photos/:id/like", (req, res) => {
@@ -610,12 +678,16 @@ app.post("/api/photos/:id/like", (req, res) => {
         });
     }
 
-    const photo = db.prepare(`
+    const photo = db
+        .prepare(
+            `
         SELECT id, likes
         FROM photos
         WHERE id = ?
         AND status = 'approved'
-    `).get(id) as { id: number; likes: number } | undefined;
+    `
+        )
+        .get(id) as { id: number; likes: number } | undefined;
 
     if (!photo) {
         return res.status(404).json({
@@ -624,34 +696,37 @@ app.post("/api/photos/:id/like", (req, res) => {
     }
 
     try {
-        db.prepare(`
+        db.prepare(
+            `
             INSERT INTO photo_likes (
                 photo_id,
                 client_id,
                 created_at
             ) VALUES (?, ?, ?)
-        `).run(
-            id,
-            clientId,
-            new Date().toISOString()
-        );
+        `
+        ).run(id, clientId, new Date().toISOString());
 
-        db.prepare(`
+        db.prepare(
+            `
             UPDATE photos
             SET likes = likes + 1
             WHERE id = ?
-        `).run(id);
-
+        `
+        ).run(id);
     } catch (error) {
         // Ako već postoji lajk za ovaj clientId i photo_id,
         // ne radimo ništa. Jedan uređaj = jedan lajk.
     }
 
-    const updated = db.prepare(`
+    const updated = db
+        .prepare(
+            `
         SELECT likes
         FROM photos
         WHERE id = ?
-    `).get(id) as { likes: number };
+    `
+        )
+        .get(id) as { likes: number };
 
     res.json({
         id,
@@ -660,8 +735,75 @@ app.post("/api/photos/:id/like", (req, res) => {
     });
 });
 
-app.get("/api/admin/photos", (req, res) => {
-    const photos = db.prepare(`
+app.post("/api/admin/login", adminLoginLimiter, async (req, res) => {
+    const { username, password } = req.body;
+
+    if (!username || !password) {
+        return res.status(400).json({
+            error: "Username i password su obavezni."
+        });
+    }
+
+    const admin = db
+        .prepare(
+            `
+        SELECT *
+        FROM admins
+        WHERE username = ?
+    `
+        )
+        .get(username) as any;
+
+    if (!admin) {
+        return res.status(401).json({
+            error: "Pogrešni kredencijali."
+        });
+    }
+
+    const validPassword = await bcrypt.compare(password, admin.password_hash);
+
+    if (!validPassword) {
+        return res.status(401).json({
+            error: "Pogrešni kredencijali."
+        });
+    }
+
+    req.session.adminId = admin.id;
+    req.session.username = admin.username;
+
+    res.json({
+        success: true,
+        username: admin.username
+    });
+});
+
+app.get("/api/admin/me", requireAdmin, (req, res) => {
+    res.json({
+        id: req.session.adminId,
+        username: req.session.username
+    });
+});
+
+app.post("/api/admin/logout", requireAdmin, (req, res) => {
+    req.session.destroy((error) => {
+        if (error) {
+            return res.status(500).json({
+                error: "Logout nije uspeo."
+            });
+        }
+
+        res.clearCookie("wedding_admin_sid");
+
+        res.json({
+            success: true
+        });
+    });
+});
+
+app.get("/api/admin/photos", requireAdmin, (req, res) => {
+    const photos = db
+        .prepare(
+            `
         SELECT
             id,
             filename,
@@ -685,14 +827,17 @@ app.get("/api/admin/photos", (req, res) => {
                 ELSE 3
             END,
             uploaded_at DESC
-    `).all();
+    `
+        )
+        .all();
 
     res.json({ photos });
 });
-    
 
-app.get("/api/admin/stats", (req, res) => {
-    const stats = db.prepare(`
+app.get("/api/admin/stats", requireAdmin, (req, res) => {
+    const stats = db
+        .prepare(
+            `
         SELECT
             COUNT(*) AS total,
             SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END) AS approved,
@@ -700,19 +845,25 @@ app.get("/api/admin/stats", (req, res) => {
             SUM(CASE WHEN status = 'hidden' THEN 1 ELSE 0 END) AS hidden,
             COALESCE(SUM(downloads), 0) AS downloads
         FROM photos
-    `).get();
+    `
+        )
+        .get();
 
     res.json({ stats });
 });
 
-app.patch("/api/admin/photos/:id/hide", (req, res) => {
+app.patch("/api/admin/photos/:id/hide", requireAdmin, (req, res) => {
     const id = Number(req.params.id);
 
-    const result = db.prepare(`
+    const result = db
+        .prepare(
+            `
         UPDATE photos
         SET status = 'hidden'
         WHERE id = ?
-    `).run(id);
+    `
+        )
+        .run(id);
 
     if (result.changes === 0) {
         return res.status(404).json({
@@ -727,17 +878,21 @@ app.patch("/api/admin/photos/:id/hide", (req, res) => {
     });
 });
 
-app.patch("/api/admin/photos/:id/pending", (req, res) => {
+app.patch("/api/admin/photos/:id/pending", requireAdmin, (req, res) => {
     const id = Number(req.params.id);
 
-    const photo = db.prepare(`
+    const photo = db
+        .prepare(
+            `
         SELECT
             id,
             filename,
             status
         FROM photos
         WHERE id = ?
-    `).get(id) as { id: number; filename: string; status: string } | undefined;
+    `
+        )
+        .get(id) as { id: number; filename: string; status: string } | undefined;
 
     if (!photo) {
         return res.status(404).json({
@@ -745,11 +900,15 @@ app.patch("/api/admin/photos/:id/pending", (req, res) => {
         });
     }
 
-    const result = db.prepare(`
+    const result = db
+        .prepare(
+            `
         UPDATE photos
         SET status = 'pending_review'
         WHERE id = ?
-    `).run(id);
+    `
+        )
+        .run(id);
 
     if (result.changes === 0) {
         return res.status(404).json({
@@ -768,14 +927,18 @@ app.patch("/api/admin/photos/:id/pending", (req, res) => {
     });
 });
 
-app.patch("/api/admin/photos/:id/approve", (req, res) => {
+app.patch("/api/admin/photos/:id/approve", requireAdmin, (req, res) => {
     const id = Number(req.params.id);
 
-    const result = db.prepare(`
+    const result = db
+        .prepare(
+            `
         UPDATE photos
         SET status = 'approved'
         WHERE id = ?
-    `).run(id);
+    `
+        )
+        .run(id);
 
     if (result.changes === 0) {
         return res.status(404).json({
@@ -790,21 +953,27 @@ app.patch("/api/admin/photos/:id/approve", (req, res) => {
     });
 });
 
-app.delete("/api/admin/photos/:id", (req, res) => {
+app.delete("/api/admin/photos/:id", requireAdmin, (req, res) => {
     const id = Number(req.params.id);
 
-const photo = db.prepare(`
+    const photo = db
+        .prepare(
+            `
     SELECT
         id,
         filename,
         media_type AS mediaType
     FROM photos
     WHERE id = ?
-`).get(id) as {
-    id: number;
-    filename: string;
-    mediaType: string;
-} | undefined;
+`
+        )
+        .get(id) as
+        | {
+              id: number;
+              filename: string;
+              mediaType: string;
+          }
+        | undefined;
 
     if (!photo) {
         return res.status(404).json({
@@ -812,21 +981,15 @@ const photo = db.prepare(`
         });
     }
 
-const originalPath = path.join(
-    photo.mediaType === "video"
-        ? uploadFolderVideosOriginal
-        : uploadFolderOriginal,
-    photo.filename
-);
+    const originalPath = path.join(
+        photo.mediaType === "video" ? uploadFolderVideosOriginal : uploadFolderOriginal,
+        photo.filename
+    );
 
-const thumbPath = path.join(
-    photo.mediaType === "video"
-        ? uploadFolderVideosThumbs
-        : uploadFolderThumbs,
-    photo.mediaType === "video"
-        ? photo.filename + ".jpg"
-        : photo.filename
-);
+    const thumbPath = path.join(
+        photo.mediaType === "video" ? uploadFolderVideosThumbs : uploadFolderThumbs,
+        photo.mediaType === "video" ? photo.filename + ".jpg" : photo.filename
+    );
 
     try {
         if (fs.existsSync(originalPath)) {
@@ -837,10 +1000,12 @@ const thumbPath = path.join(
             fs.unlinkSync(thumbPath);
         }
 
-        db.prepare(`
+        db.prepare(
+            `
             DELETE FROM photos
             WHERE id = ?
-        `).run(id);
+        `
+        ).run(id);
 
         res.json({
             message: "Slika je obrisana.",
@@ -855,28 +1020,29 @@ const thumbPath = path.join(
     }
 });
 
-app.get("/api/admin/download/photos", (req, res) => {
-    const photos = db.prepare(`
+app.get("/api/admin/download/photos", requireAdmin, (req, res) => {
+    const photos = db
+        .prepare(
+            `
         SELECT filename
         FROM photos
         WHERE status = 'approved'
         AND media_type = 'image'
-    `).all() as { filename: string }[];
+    `
+        )
+        .all() as { filename: string }[];
 
-    res.setHeader(
-        "Content-Disposition",
-        `attachment; filename="wedding-photos.zip"`
-    );
+    res.setHeader("Content-Disposition", `attachment; filename="wedding-photos.zip"`);
 
     res.setHeader("Content-Type", "application/zip");
 
-const archive = new archiver.ZipArchive({
-    zlib: { level: 9 }
-});
+    const archive = new archiver.ZipArchive({
+        zlib: { level: 9 }
+    });
 
     archive.pipe(res);
 
-    photos.forEach(photo => {
+    photos.forEach((photo) => {
         const filePath = path.join(uploadFolderOriginal, photo.filename);
 
         if (fs.existsSync(filePath)) {
@@ -887,28 +1053,29 @@ const archive = new archiver.ZipArchive({
     archive.finalize();
 });
 
-app.get("/api/admin/download/videos", (req, res) => {
-    const videos = db.prepare(`
+app.get("/api/admin/download/videos", requireAdmin, (req, res) => {
+    const videos = db
+        .prepare(
+            `
         SELECT filename
         FROM photos
         WHERE status = 'approved'
         AND media_type = 'video'
-    `).all() as { filename: string }[];
+    `
+        )
+        .all() as { filename: string }[];
 
-    res.setHeader(
-        "Content-Disposition",
-        `attachment; filename="wedding-videos.zip"`
-    );
+    res.setHeader("Content-Disposition", `attachment; filename="wedding-videos.zip"`);
 
     res.setHeader("Content-Type", "application/zip");
 
-const archive = new archiver.ZipArchive({
-    zlib: { level: 9 }
-});
+    const archive = new archiver.ZipArchive({
+        zlib: { level: 9 }
+    });
 
     archive.pipe(res);
 
-    videos.forEach(video => {
+    videos.forEach((video) => {
         const filePath = path.join(uploadFolderVideosOriginal, video.filename);
 
         if (fs.existsSync(filePath)) {
@@ -930,12 +1097,37 @@ app.get("/api/health", (req, res) => {
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
     console.error("ERROR:", err);
 
-    res.status(500).json({
+    if (err instanceof multer.MulterError) {
+        if (err.code === "LIMIT_FILE_SIZE") {
+            return res.status(413).json({
+                error: "Fajl je prevelik. Maksimalna veličina je 500 MB."
+            });
+        }
+
+        if (err.code === "LIMIT_UNEXPECTED_FILE") {
+            return res.status(400).json({
+                error: "Neočekivano upload polje. Koristi polje 'photo'."
+            });
+        }
+
+        return res.status(400).json({
+            error: "Neispravan upload zahtev.",
+            code: err.code
+        });
+    }
+
+    if (err instanceof Error && err.message === "Dozvoljene su samo slike i video fajlovi") {
+        return res.status(415).json({
+            error: "Dozvoljene su samo slike i video fajlovi."
+        });
+    }
+
+    return res.status(500).json({
         error: "Internal server error"
     });
 });
 
-const server = app.listen(PORT, "0.0.0.0", () => {
+const server = app.listen(PORT, "127.0.0.1", () => {
     console.log(`Server radi na portu ${PORT}`);
 });
 
