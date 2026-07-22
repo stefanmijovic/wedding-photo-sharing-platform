@@ -31,8 +31,8 @@ app.disable("x-powered-by");
 
 const PORT = Number(process.env.PORT) || 3000;
 
-const ADMIN_EMAIL = "crnobradi92@gmail.com";
-const ADMIN_PANEL_URL = "http://192.168.3.222/admin.html";
+const ADMIN_EMAIL = "example@gmail.com";
+const ADMIN_PANEL_URL = "http://192.168.1.2/admin.html";
 
 function sendPendingReviewEmail(photoId: number, filename: string) {
     const subject = "Wedding app: fotografija čeka pregled";
