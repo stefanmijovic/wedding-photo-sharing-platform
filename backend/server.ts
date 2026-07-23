@@ -77,6 +77,11 @@ function getRequiredEnv(name: string): string {
 // Ove vrednosti se sada čitaju iz .env fajla umesto da su hardkodovane u kodu
 const ADMIN_EMAIL = getRequiredEnv("ADMIN_EMAIL");           // Email adresa administratora koji dobija notifikacije
 const ADMIN_PANEL_URL = getRequiredEnv("ADMIN_PANEL_URL");   // Link ka admin panelu koji se šalje u emailu
+const SESSION_SECRET = getRequiredEnv("SESSION_SECRET");
+
+if (SESSION_SECRET.length < 32) {
+    throw new Error("SESSION_SECRET mora imati najmanje 32 karaktera.");
+}
 
 /**
  * Funkcija koja šalje email notifikaciju administratoru kada
@@ -123,14 +128,18 @@ app.set("trust proxy", 1);
 // CORS KONFIGURACIJA
 // ============================================================
 // Definiše koji frontend domeni smeju da pristupaju ovom API-ju
+const allowedOrigins = [
+    "https://ivaniandrijana.cloud",
+    "https://www.ivaniandrijana.cloud"
+];
+
+if (process.env.NODE_ENV !== "production") {
+    allowedOrigins.push("http://localhost", "http://localhost:3000");
+}
+
 app.use(
     cors({
-        origin: [
-            "https://ivaniandrijana.cloud",
-            "https://www.ivaniandrijana.cloud",
-            "http://localhost",
-            "http://localhost:3000"
-        ],
+        origin: allowedOrigins,
         methods: ["GET", "POST", "PATCH", "DELETE"], // Dozvoljeni HTTP metodi
         credentials: true // Dozvoljava slanje kolačića (cookies) preko CORS-a - neophodno za sesije
     })
@@ -141,16 +150,109 @@ app.use(express.json()); // Middleware koji parsira JSON telo zahteva u req.body
 // ============================================================
 // SESSION MIDDLEWARE (za admin login)
 // ============================================================
+const sessionDbPath = path.join(__dirname, "../../sessions.sqlite");
+
+class SQLiteSessionStore extends session.Store {
+    private readonly sessionDb: Database.Database;
+    private readonly cleanupTimer: NodeJS.Timeout;
+
+    constructor(filename: string) {
+        super();
+        this.sessionDb = new Database(filename);
+        this.sessionDb.pragma("journal_mode = WAL");
+        this.sessionDb.exec(`
+            CREATE TABLE IF NOT EXISTS sessions (
+                sid TEXT PRIMARY KEY,
+                sess TEXT NOT NULL,
+                expires INTEGER NOT NULL
+            )
+        `);
+        this.cleanupTimer = setInterval(() => {
+            try {
+                this.sessionDb.prepare("DELETE FROM sessions WHERE expires <= ?").run(Date.now());
+            } catch (error) {
+                console.error("Greška pri čišćenju isteklih sesija:", error);
+            }
+        }, 60 * 60 * 1000);
+        this.cleanupTimer.unref();
+    }
+
+    get(
+        sid: string,
+        callback: (err: unknown, value?: session.SessionData | null) => void
+    ): void {
+        try {
+            const now = Date.now();
+
+            const row = this.sessionDb
+                .prepare("SELECT sess FROM sessions WHERE sid = ? AND expires > ?")
+                .get(sid, now) as { sess: string } | undefined;
+
+            callback(null, row ? (JSON.parse(row.sess) as session.SessionData) : null);
+        } catch (error) {
+            callback(error);
+        }
+    }
+
+    set(sid: string, value: session.SessionData, callback?: (err?: unknown) => void): void {
+        try {
+            const expires = value.cookie.expires?.getTime() ?? Date.now() + 1000 * 60 * 60 * 12;
+
+            this.sessionDb
+                .prepare(`
+                    INSERT INTO sessions (sid, sess, expires)
+                    VALUES (?, ?, ?)
+                    ON CONFLICT(sid) DO UPDATE SET
+                        sess = excluded.sess,
+                        expires = excluded.expires
+                `)
+                .run(sid, JSON.stringify(value), expires);
+
+            callback?.();
+        } catch (error) {
+            callback?.(error);
+        }
+    }
+
+    destroy(sid: string, callback?: (err?: unknown) => void): void {
+        try {
+            this.sessionDb.prepare("DELETE FROM sessions WHERE sid = ?").run(sid);
+            callback?.();
+        } catch (error) {
+            callback?.(error);
+        }
+    }
+
+    touch(sid: string, value: session.SessionData, callback?: (err?: unknown) => void): void {
+        try {
+            const expires = value.cookie.expires?.getTime() ?? Date.now() + 1000 * 60 * 60 * 12;
+            this.sessionDb.prepare("UPDATE sessions SET expires = ? WHERE sid = ?").run(expires, sid);
+            callback?.();
+        } catch (error) {
+            callback?.(error);
+        }
+    }
+
+    close(): void {
+        clearInterval(this.cleanupTimer);
+        this.sessionDb.close();
+    }
+}
+
+const sessionStore = new SQLiteSessionStore(sessionDbPath);
+
 app.use(
     session({
+        store: sessionStore,
         name: "wedding_admin_sid",                                  // Ime cookie-ja u kom se čuva session ID
-        secret: process.env.SESSION_SECRET || "change-this-secret-before-production", // Tajni ključ za potpisivanje session cookie-ja
+        secret: SESSION_SECRET,
         resave: false,           // Ne snima sesiju nazad ako nije menjana
         saveUninitialized: false, // Ne kreira sesiju dok se nešto ne upiše u nju
         cookie: {
             httpOnly: true,                              // Cookie nije dostupan iz JavaScript-a (zaštita od XSS)
             secure: process.env.NODE_ENV === "production", // Cookie se šalje samo preko HTTPS-a u produkciji
             sameSite: "lax",                              // Zaštita od CSRF napada
+            path: "/",
             maxAge: 1000 * 60 * 60 * 12                   // Trajanje sesije: 12 sati
         }
     })
@@ -162,9 +264,19 @@ app.use(
 // Ograničava broj upload zahteva po IP adresi (sprečava zloupotrebu/flooding)
 const uploadLimiter = rateLimit({
     windowMs: 60 * 1000, // Vremenski prozor od 1 minuta
-    max: 200,            // Maksimalno 200 zahteva u tom prozoru
+    max: 200,
     message: {
         error: "Previše zahteva. Pokušajte ponovo kasnije."
+    }
+});
+
+const likeLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 60,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: {
+        error: "Previše zahteva za lajkovanje."
     }
 });
 
@@ -319,15 +431,24 @@ const adminExists = db
         `
     SELECT id
     FROM admins
-    WHERE username = ?
+    LIMIT 1
 `
     )
-    .get("admin");
+    .get();
 
 // Ako ne postoji, kreira ga sa podrazumevanom lozinkom (heširanom pomoću bcrypt)
 // NAPOMENA: ovu lozinku treba promeniti odmah nakon prvog pokretanja u produkciji
 if (!adminExists) {
-    const passwordHash = bcrypt.hashSync("PromeniMe123!", 12); // 12 = broj bcrypt "rounds" (jačina heša)
+    const defaultAdminUsername = process.env.DEFAULT_ADMIN_USERNAME?.trim();
+    const defaultAdminPassword = process.env.DEFAULT_ADMIN_PASSWORD;
+
+    if (!defaultAdminUsername || !defaultAdminPassword || defaultAdminPassword.length < 12) {
+        throw new Error(
+            "Baza nema administratora. Definišite DEFAULT_ADMIN_USERNAME i DEFAULT_ADMIN_PASSWORD od najmanje 12 karaktera."
+        );
+    }
+
+    const passwordHash = bcrypt.hashSync(defaultAdminPassword, 12);
 
     db.prepare(
         `
@@ -338,7 +459,7 @@ if (!adminExists) {
         )
         VALUES (?, ?, ?)
     `
-    ).run("admin", passwordHash, new Date().toISOString());
+    ).run(defaultAdminUsername, passwordHash, new Date().toISOString());
 
     console.log("Kreiran podrazumevani administrator.");
 }
@@ -347,6 +468,22 @@ if (!adminExists) {
 // STATIČKI FAJLOVI - direktno serviranje uploadovanih slika/videa
 // ============================================================
 // Sve iz foldera "uploads" postaje dostupno preko /uploads/... URL putanje
+app.use("/uploads", (req, res, next) => {
+    const mediaUrl = `/uploads${req.path}`;
+    const photo = db
+        .prepare(`
+            SELECT status
+            FROM photos
+            WHERE original_url = ? OR thumb_url = ? OR web_url = ?
+        `)
+        .get(mediaUrl, mediaUrl, mediaUrl) as { status: string } | undefined;
+
+    if (!photo || (photo.status !== "approved" && !req.session.adminId)) {
+        return res.status(404).end();
+    }
+
+    next();
+});
 app.use("/uploads", express.static(path.join(__dirname, "../../uploads")));
 
 // ============================================================
@@ -450,13 +587,24 @@ function enqueueVideoJob(job: () => Promise<void>) {
 // Pokreće ffmpeg komandu preko "nice" (niži prioritet procesa da ne uguši server)
 function runNiceFfmpeg(args: string[]) {
     return new Promise<void>((resolve, reject) => {
-        execFile("nice", ["-n", "10", "ffmpeg", ...args], (error) => {
+        const handleResult = (error: Error | null, stderr: string) => {
             if (error) {
-                reject(error);
+                reject(new Error(`FFmpeg nije uspeo: ${stderr.trim() || error.message}`, { cause: error }));
                 return;
             }
 
             resolve();
+        };
+
+        execFile("nice", ["-n", "10", "ffmpeg", ...args], (error, _stdout, stderr) => {
+            if (error && "code" in error && error.code === "ENOENT") {
+                execFile("ffmpeg", args, (fallbackError, _fallbackStdout, fallbackStderr) => {
+                    handleResult(fallbackError, fallbackStderr);
+                });
+                return;
+            }
+
+            handleResult(error, stderr);
         });
     });
 }
@@ -464,12 +612,12 @@ function runNiceFfmpeg(args: string[]) {
 let videoJobCounter = 0;
 
 // Stavlja video obradu u red čekanja i pokreće je kad dođe na red
-function processVideoInBackground(photoId: number, filePath: string, filename: string) {
+function processVideoInBackground(photoId: number, filePath: string, filename: string): Promise<void> {
     const jobId = ++videoJobCounter;
 
     console.log("VIDEO QUEUE ČEKA:", jobId, photoId, filename);
 
-    enqueueVideoJob(async () => {
+    return enqueueVideoJob(async () => {
         console.log("VIDEO QUEUE POČINJE:", jobId, photoId, filename);
 
         await processVideoJob(photoId, filePath, filename);
@@ -484,7 +632,7 @@ async function processVideoJob(photoId: number, filePath: string, filename: stri
     const videoThumbName = filename + ".jpg";
     const videoThumbPath = path.join(uploadFolderVideosThumbs, videoThumbName);
 
-    const webVideoName = filename;
+    const webVideoName = `${path.parse(filename).name}.mp4`;
     const webVideoPath = path.join(uploadFolderVideosWeb, webVideoName);
 
     const thumbUrl = `/uploads/videos/thumbs/${videoThumbName}`;
@@ -492,46 +640,71 @@ async function processVideoJob(photoId: number, filePath: string, filename: stri
 
     console.log("Pokrećem queued video obradu:", photoId, filename);
 
-    // 1. korak: izvlači jedan frame iz videa (na 1. sekundi) i pravi kvadratni (400x400) thumbnail
-    await runNiceFfmpeg([
-        "-y",                // Automatski prepiše fajl ako već postoji
-        "-i",
-        filePath,            // Ulazni video fajl
-        "-ss",
-        "00:00:01",          // Pozicija u videu sa koje se uzima frame (1. sekunda)
-        "-vframes",
-        "1",                 // Uzima samo 1 frame
-        "-vf",
-        "scale=400:400:force_original_aspect_ratio=increase,crop=400:400", // Skalira i seče sliku na 400x400
-        videoThumbPath
-    ]);
+    try {
+        // Prvo pokušava frejm na 1. sekundi; za veoma kratke snimke koristi prvi frejm.
+        const thumbnailArgs = (seekToOneSecond: boolean) => [
+            "-y",
+            "-i",
+            filePath,
+            ...(seekToOneSecond ? ["-ss", "00:00:01"] : []),
+            "-frames:v",
+            "1",
+            "-vf",
+            "scale=400:400:force_original_aspect_ratio=increase,crop=400:400",
+            videoThumbPath
+        ];
+        const thumbnailExists = () =>
+            fs.existsSync(videoThumbPath) && fs.statSync(videoThumbPath).size > 0;
 
-    // 2. korak: konvertuje video u web-optimizovan format (H.264 + AAC, manja rezolucija/bitrate)
-    await runNiceFfmpeg([
-        "-y",
-        "-i",
-        filePath,
-        "-vf",
-        "scale='min(1280,iw)':-2", // Smanjuje širinu na max 1280px, čuvajući odnos stranica
-        "-c:v",
-        "libx264",       // Video kodek
-        "-preset",
-        "fast",          // Brzina enkodiranja (kompromis brzina/kompresija)
-        "-crf",
-        "28",            // Kvalitet kompresije (veći broj = manji fajl, niži kvalitet)
-        "-movflags",
-        "+faststart",    // Omogućava da video počne da se plejuje pre potpunog preuzimanja
-        "-c:a",
-        "aac",           // Audio kodek
-        "-b:a",
-        "128k",          // Audio bitrate
-        "-threads",
-        "2",             // Ograničava broj CPU niti koje ffmpeg koristi
-        webVideoPath
-    ]);
+        try {
+            await runNiceFfmpeg(thumbnailArgs(true));
+        } catch (thumbnailError) {
+            console.warn("Thumbnail na 1. sekundi nije napravljen, pokušavam prvi frejm:", thumbnailError);
+        }
 
-    // Nakon obrade, ažurira bazu sa putanjama do thumbnail-a i web verzije videa
-    db.prepare(
+        if (!thumbnailExists()) {
+            if (fs.existsSync(videoThumbPath)) {
+                fs.unlinkSync(videoThumbPath);
+            }
+            await runNiceFfmpeg(thumbnailArgs(false));
+        }
+
+        if (!thumbnailExists()) {
+            throw new Error("FFmpeg nije napravio video thumbnail.");
+        }
+
+        // 2. korak: konvertuje video u web-optimizovan MP4 (H.264 + AAC)
+        await runNiceFfmpeg([
+            "-y",
+            "-i",
+            filePath,
+            "-vf",
+            "scale='min(1280,iw)':-2",
+            "-c:v",
+            "libx264",
+            "-preset",
+            "fast",
+            "-crf",
+            "28",
+            "-movflags",
+            "+faststart",
+            "-c:a",
+            "aac",
+            "-b:a",
+            "128k",
+            "-threads",
+            "2",
+            "-f",
+            "mp4",
+            webVideoPath
+        ]);
+
+        if (!fs.existsSync(webVideoPath) || fs.statSync(webVideoPath).size === 0) {
+            throw new Error("FFmpeg nije napravio web MP4 verziju.");
+        }
+
+        // Nakon obrade, ažurira bazu sa putanjama do thumbnail-a i web verzije videa
+        const updateResult = db.prepare(
         `
         UPDATE photos
         SET
@@ -540,9 +713,41 @@ async function processVideoJob(photoId: number, filePath: string, filename: stri
             ai_reason = ?
         WHERE id = ?
     `
-    ).run(thumbUrl, webUrl, "Video fajl - web verzija spremna, ručni pregled potreban", photoId);
+        ).run(thumbUrl, webUrl, "Video fajl - web verzija spremna, ručni pregled potreban", photoId);
 
-    console.log("Queued video obrada završena:", photoId);
+        if (updateResult.changes === 0) {
+            for (const generatedPath of [videoThumbPath, webVideoPath]) {
+                if (fs.existsSync(generatedPath)) {
+                    fs.unlinkSync(generatedPath);
+                }
+            }
+            return;
+        }
+
+        console.log("Queued video obrada završena:", photoId);
+    } catch (error) {
+        for (const generatedPath of [videoThumbPath, webVideoPath]) {
+            try {
+                if (fs.existsSync(generatedPath)) {
+                    fs.unlinkSync(generatedPath);
+                }
+            } catch (cleanupError) {
+                console.error("Greška pri čišćenju neuspele video obrade:", generatedPath, cleanupError);
+            }
+        }
+
+        try {
+            db.prepare(`
+                UPDATE photos
+                SET ai_reason = ?
+                WHERE id = ?
+            `).run("Video fajl - obrada nije uspela, ručni pregled potreban", photoId);
+        } catch (dbError) {
+            console.error("Nije moguće evidentirati neuspešnu video obradu:", dbError);
+        }
+
+        throw error;
+    }
 }
 
 // ============================================================
@@ -557,6 +762,53 @@ function requireAdmin(req: express.Request, res: express.Response, next: express
     }
 
     next();
+}
+
+const trustedAdminOrigins = new Set(allowedOrigins);
+
+function requireTrustedAdminOrigin(
+    req: express.Request,
+    res: express.Response,
+    next: express.NextFunction
+) {
+    if (!["POST", "PATCH", "DELETE"].includes(req.method)) {
+        next();
+        return;
+    }
+
+    const sourceHeader = req.get("origin") ?? req.get("referer");
+
+    if (!sourceHeader) {
+        return res.status(403).json({
+            error: "Zahtev nema dozvoljeno poreklo."
+        });
+    }
+
+    try {
+        const sourceOrigin = new URL(sourceHeader).origin;
+
+        if (!trustedAdminOrigins.has(sourceOrigin)) {
+            return res.status(403).json({
+                error: "Zahtev nema dozvoljeno poreklo."
+            });
+        }
+    } catch {
+        return res.status(403).json({
+            error: "Zahtev nema dozvoljeno poreklo."
+        });
+    }
+
+    next();
+}
+
+app.use("/api/admin", requireTrustedAdminOrigin);
+
+function parsePositiveId(value: string | string[] | undefined): number | null {
+    if (typeof value !== "string") {
+        return null;
+    }
+    const id = Number(value);
+    return Number.isSafeInteger(id) && id > 0 ? id : null;
 }
 
 // ============================================================
@@ -577,6 +829,8 @@ app.post("/api/upload", uploadLimiter, upload.single("photo"), async (req, res) 
     const isVideo = file.mimetype.startsWith("video/") || [".mp4", ".mov", ".webm", ".avi", ".mkv"].includes(ext);
 
     const mediaType = isVideo ? "video" : "image";
+    let storedFilename = file.filename;
+    let storedFilePath = file.path;
 
     console.log("Fajl primljen:", file.filename, mediaType);
 
@@ -600,18 +854,22 @@ app.post("/api/upload", uploadLimiter, upload.single("photo"), async (req, res) 
             aiReason = "Video fajl - obrada u toku, ručni pregled potreban";
         } else {
             // Za sliku: sinhrona obrada odmah pri uploadu
-            const thumbPath = path.join(uploadFolderThumbs, file.filename);
+            storedFilename = `${path.parse(file.filename).name}.jpg`;
+            storedFilePath = path.join(uploadFolderOriginal, storedFilename);
+            const processedImagePath = storedFilePath + ".processing";
+            const thumbPath = path.join(uploadFolderThumbs, storedFilename);
 
             // Ispravlja orijentaciju slike (EXIF rotate) i re-enkodira u JPEG visokog kvaliteta
             await sharp(file.path)
                 .rotate()
                 .jpeg({ quality: 95 })
-                .toFile(file.path + ".fixed");
+                .toFile(processedImagePath);
 
-            fs.renameSync(file.path + ".fixed", file.path); // Zamenjuje original ispravljenom verzijom
+            fs.unlinkSync(file.path);
+            fs.renameSync(processedImagePath, storedFilePath);
 
             // Pravi kvadratni thumbnail (400x400, "cover" - seče višak da ispuni kvadrat)
-            await sharp(file.path)
+            await sharp(storedFilePath)
                 .resize({
                     width: 400,
                     height: 400,
@@ -620,11 +878,11 @@ app.post("/api/upload", uploadLimiter, upload.single("photo"), async (req, res) 
                 .jpeg({ quality: 80 })
                 .toFile(thumbPath);
 
-            originalUrl = `/uploads/original/${file.filename}`;
-            thumbUrl = `/uploads/thumbs/${file.filename}`;
+            originalUrl = `/uploads/original/${storedFilename}`;
+            thumbUrl = `/uploads/thumbs/${storedFilename}`;
 
             // Pokreće AI moderaciju slike (u redu čekanja) - određuje da li je slika prikladna
-            const moderation = await runAiModerationQueued(file.path);
+            const moderation = await runAiModerationQueued(storedFilePath);
 
             status = moderation.status;       // npr. "approved" ili "pending_review"
             aiScore = moderation.aiScore;     // numerička ocena AI-ja
@@ -649,7 +907,7 @@ app.post("/api/upload", uploadLimiter, upload.single("photo"), async (req, res) 
         `
             )
             .run(
-                file.filename,
+                storedFilename,
                 originalUrl,
                 thumbUrl,
                 status,
@@ -664,12 +922,12 @@ app.post("/api/upload", uploadLimiter, upload.single("photo"), async (req, res) 
 
         // Ako fajl čeka pregled, šalje email obaveštenje administratoru
         if (status === "pending_review") {
-            sendPendingReviewEmail(insertedId, file.filename);
+            sendPendingReviewEmail(insertedId, storedFilename);
         }
 
         // Ako je video, pokreće se pozadinska obrada (thumbnail + konverzija)
         if (isVideo) {
-            processVideoInBackground(insertedId, file.path, file.filename);
+            void processVideoInBackground(insertedId, file.path, file.filename);
         }
 
         // Vraća odgovor klijentu sa informacijama o uploadovanom fajlu
@@ -677,7 +935,7 @@ app.post("/api/upload", uploadLimiter, upload.single("photo"), async (req, res) 
             message: isVideo
                 ? "Video je uploadovan i obrada je pokrenuta u pozadini."
                 : "Slika i thumbnail uspešno uploadovani!",
-            filename: file.filename,
+            filename: storedFilename,
             mediaType,
             originalUrl,
             thumbUrl,
@@ -688,7 +946,12 @@ app.post("/api/upload", uploadLimiter, upload.single("photo"), async (req, res) 
         // U slučaju greške, briše sve delimično kreirane fajlove (originalni, .fixed privremeni, thumbnail)
         console.error("Greška pri obradi fajla:", error);
 
-        const cleanupPaths = [file.path, file.path + ".fixed", path.join(uploadFolderThumbs, file.filename)];
+        const cleanupPaths = [
+            file.path,
+            storedFilePath,
+            storedFilePath + ".processing",
+            path.join(uploadFolderThumbs, storedFilename)
+        ];
 
         for (const cleanupPath of cleanupPaths) {
             try {
@@ -775,7 +1038,10 @@ app.get("/api/photos", (req, res) => {
 // RUTA: GET /api/photos/:id/download - preuzimanje originalnog fajla
 // ============================================================
 app.get("/api/photos/:id/download", (req, res) => {
-    const id = Number(req.params.id);
+    const id = parsePositiveId(req.params.id);
+    if (id === null) {
+        return res.status(400).json({ error: "Neispravan ID." });
+    }
 
     // Pronalazi fotografiju/video po ID-ju, samo ako je odobrena (approved)
     const photo = db
@@ -784,7 +1050,9 @@ app.get("/api/photos/:id/download", (req, res) => {
  SELECT
         id,
         filename,
-        media_type AS mediaType
+        media_type AS mediaType,
+        thumb_url AS thumbUrl,
+        web_url AS webUrl
     FROM photos
     WHERE id = ?
     AND status = 'approved'
@@ -795,6 +1063,8 @@ app.get("/api/photos/:id/download", (req, res) => {
               id: number;
               filename: string;
               mediaType: string;
+              thumbUrl: string;
+              webUrl: string;
           }
         | undefined;
 
@@ -831,13 +1101,20 @@ app.get("/api/photos/:id/download", (req, res) => {
 // ============================================================
 // RUTA: POST /api/photos/:id/like - lajkovanje fotografije/videa
 // ============================================================
-app.post("/api/photos/:id/like", (req, res) => {
-    const id = Number(req.params.id);
+app.post("/api/photos/:id/like", likeLimiter, (req, res) => {
+    const id = parsePositiveId(req.params.id);
+    if (id === null) {
+        return res.status(400).json({ error: "Neispravan ID." });
+    }
     const clientId = String(req.body.clientId || "").trim(); // Jedinstveni identifikator uređaja/klijenta (šalje frontend)
 
-    if (!clientId) {
+    if (
+        clientId.length < 16 ||
+        clientId.length > 128 ||
+        !/^[a-zA-Z0-9_-]+$/.test(clientId)
+    ) {
         return res.status(400).json({
-            error: "clientId je obavezan."
+            error: "Neispravan clientId."
         });
     }
 
@@ -859,10 +1136,7 @@ app.post("/api/photos/:id/like", (req, res) => {
         });
     }
 
-    try {
-        // Pokušava da upiše lajk u photo_likes tabelu.
-        // Zbog UNIQUE(photo_id, client_id) ograničenja, isti client_id ne može
-        // da lajkuje istu fotografiju dva puta - drugi pokušaj baca grešku.
+    const addLike = db.transaction((photoId: number, likerClientId: string) => {
         db.prepare(
             `
             INSERT INTO photo_likes (
@@ -871,19 +1145,35 @@ app.post("/api/photos/:id/like", (req, res) => {
                 created_at
             ) VALUES (?, ?, ?)
         `
-        ).run(id, clientId, new Date().toISOString());
+        ).run(photoId, likerClientId, new Date().toISOString());
 
-        // Ako je upis uspeo (prvi lajk sa ovog uređaja), povećava ukupan brojač lajkova
-        db.prepare(
+        const updateResult = db.prepare(
             `
             UPDATE photos
             SET likes = likes + 1
             WHERE id = ?
         `
-        ).run(id);
+        ).run(photoId);
+
+        if (updateResult.changes !== 1) {
+            throw new Error("Fotografija nije ažurirana tokom lajkovanja.");
+        }
+    });
+
+    try {
+        addLike(id, clientId);
     } catch (error) {
-        // Ako već postoji lajk za ovaj clientId i photo_id,
-        // ne radimo ništa. Jedan uređaj = jedan lajk.
+        const isDuplicateLike =
+            error instanceof Error &&
+            "code" in error &&
+            error.code === "SQLITE_CONSTRAINT_UNIQUE";
+
+        if (!isDuplicateLike) {
+            console.error("Neočekivana greška pri lajkovanju:", error);
+            return res.status(500).json({
+                error: "Lajkovanje trenutno nije moguće."
+            });
+        }
     }
 
     // Vraća trenutni (ažurirani ili nepromenjeni) broj lajkova
@@ -910,9 +1200,22 @@ app.post("/api/photos/:id/like", (req, res) => {
 app.post("/api/admin/login", adminLoginLimiter, async (req, res) => {
     const { username, password } = req.body;
 
-    if (!username || !password) {
+    if (
+        typeof username !== "string" ||
+        typeof password !== "string" ||
+        !username.trim() ||
+        !password
+    ) {
         return res.status(400).json({
             error: "Username i password su obavezni."
+        });
+    }
+
+    const normalizedUsername = username.trim();
+
+    if (normalizedUsername.length > 100 || password.length > 200) {
+        return res.status(400).json({
+            error: "Neispravni kredencijali."
         });
     }
 
@@ -925,7 +1228,7 @@ app.post("/api/admin/login", adminLoginLimiter, async (req, res) => {
         WHERE username = ?
     `
         )
-        .get(username) as any;
+        .get(normalizedUsername) as any;
 
     if (!admin) {
         return res.status(401).json({
@@ -942,13 +1245,31 @@ app.post("/api/admin/login", adminLoginLimiter, async (req, res) => {
         });
     }
 
-    // Uspešna prijava - čuva podatke u sesiji (session cookie se automatski šalje klijentu)
-    req.session.adminId = admin.id;
-    req.session.username = admin.username;
+    // Regeneracija sprečava session fixation nakon uspešne autentikacije.
+    req.session.regenerate((error) => {
+        if (error) {
+            console.error("Greška pri regeneraciji admin sesije:", error);
+            return res.status(500).json({
+                error: "Prijava trenutno nije moguća."
+            });
+        }
 
-    res.json({
-        success: true,
-        username: admin.username
+        req.session.adminId = admin.id;
+        req.session.username = admin.username;
+
+        req.session.save((saveError) => {
+            if (saveError) {
+                console.error("Greška pri čuvanju admin sesije:", saveError);
+                return res.status(500).json({
+                    error: "Prijava trenutno nije moguća."
+                });
+            }
+
+            res.json({
+                success: true,
+                username: admin.username
+            });
+        });
     });
 });
 
@@ -973,7 +1294,12 @@ app.post("/api/admin/logout", requireAdmin, (req, res) => {
             });
         }
 
-        res.clearCookie("wedding_admin_sid"); // Briše session cookie iz browsera
+        res.clearCookie("wedding_admin_sid", {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+            sameSite: "lax",
+            path: "/"
+        });
 
         res.json({
             success: true
@@ -1045,7 +1371,10 @@ app.get("/api/admin/stats", requireAdmin, (req, res) => {
 // RUTA: PATCH /api/admin/photos/:id/hide - sakrivanje fotografije/videa
 // ============================================================
 app.patch("/api/admin/photos/:id/hide", requireAdmin, (req, res) => {
-    const id = Number(req.params.id);
+    const id = parsePositiveId(req.params.id);
+    if (id === null) {
+        return res.status(400).json({ error: "Neispravan ID." });
+    }
 
     const result = db
         .prepare(
@@ -1074,7 +1403,10 @@ app.patch("/api/admin/photos/:id/hide", requireAdmin, (req, res) => {
 // RUTA: PATCH /api/admin/photos/:id/pending - vraćanje na status "čeka pregled"
 // ============================================================
 app.patch("/api/admin/photos/:id/pending", requireAdmin, (req, res) => {
-    const id = Number(req.params.id);
+    const id = parsePositiveId(req.params.id);
+    if (id === null) {
+        return res.status(400).json({ error: "Neispravan ID." });
+    }
 
     // Prvo dohvata trenutni status da bi znao da li treba poslati email
     // (ne šalje se ponovo email ako je fajl već bio u statusu pending_review)
@@ -1128,7 +1460,41 @@ app.patch("/api/admin/photos/:id/pending", requireAdmin, (req, res) => {
 // RUTA: PATCH /api/admin/photos/:id/approve - odobravanje fotografije/videa
 // ============================================================
 app.patch("/api/admin/photos/:id/approve", requireAdmin, (req, res) => {
-    const id = Number(req.params.id);
+    const id = parsePositiveId(req.params.id);
+    if (id === null) {
+        return res.status(400).json({ error: "Neispravan ID." });
+    }
+
+    const photo = db
+        .prepare(`
+            SELECT
+                id,
+                media_type AS mediaType,
+                thumb_url AS thumbUrl,
+                web_url AS webUrl
+            FROM photos
+            WHERE id = ?
+        `)
+        .get(id) as
+        | {
+              id: number;
+              mediaType: string;
+              thumbUrl: string;
+              webUrl: string;
+          }
+        | undefined;
+
+    if (!photo) {
+        return res.status(404).json({
+            error: "Fajl nije pronađen."
+        });
+    }
+
+    if (photo.mediaType === "video" && (!photo.thumbUrl || !photo.webUrl)) {
+        return res.status(409).json({
+            error: "Video obrada još nije završena."
+        });
+    }
 
     const result = db
         .prepare(
@@ -1139,12 +1505,6 @@ app.patch("/api/admin/photos/:id/approve", requireAdmin, (req, res) => {
     `
         )
         .run(id);
-
-    if (result.changes === 0) {
-        return res.status(404).json({
-            error: "Slika nije pronađena."
-        });
-    }
 
     res.json({
         message: "Slika je odobrena.",
@@ -1157,7 +1517,10 @@ app.patch("/api/admin/photos/:id/approve", requireAdmin, (req, res) => {
 // RUTA: DELETE /api/admin/photos/:id - trajno brisanje fotografije/videa
 // ============================================================
 app.delete("/api/admin/photos/:id", requireAdmin, (req, res) => {
-    const id = Number(req.params.id);
+    const id = parsePositiveId(req.params.id);
+    if (id === null) {
+        return res.status(400).json({ error: "Neispravan ID." });
+    }
 
     // Pronalazi fajl da bi znao putanje originala i thumbnaila za brisanje sa diska
     const photo = db
@@ -1166,7 +1529,9 @@ app.delete("/api/admin/photos/:id", requireAdmin, (req, res) => {
     SELECT
         id,
         filename,
-        media_type AS mediaType
+        media_type AS mediaType,
+        thumb_url AS thumbUrl,
+        web_url AS webUrl
     FROM photos
     WHERE id = ?
 `
@@ -1176,6 +1541,8 @@ app.delete("/api/admin/photos/:id", requireAdmin, (req, res) => {
               id: number;
               filename: string;
               mediaType: string;
+              thumbUrl: string;
+              webUrl: string;
           }
         | undefined;
 
@@ -1193,32 +1560,54 @@ app.delete("/api/admin/photos/:id", requireAdmin, (req, res) => {
 
     const thumbPath = path.join(
         photo.mediaType === "video" ? uploadFolderVideosThumbs : uploadFolderThumbs,
-        photo.mediaType === "video" ? photo.filename + ".jpg" : photo.filename
+        path.basename(photo.thumbUrl || (photo.mediaType === "video" ? photo.filename + ".jpg" : photo.filename))
     );
+    const webPath =
+        photo.mediaType === "video" && photo.webUrl
+            ? path.join(uploadFolderVideosWeb, path.basename(photo.webUrl))
+            : null;
+
+    const stagedFiles: { originalPath: string; stagedPath: string }[] = [];
 
     try {
-        // Briše originalni fajl i thumbnail sa diska (ako postoje)
-        if (fs.existsSync(originalPath)) {
-            fs.unlinkSync(originalPath);
+        for (const filePath of [originalPath, thumbPath, webPath]) {
+            if (filePath && fs.existsSync(filePath)) {
+                const stagedPath = `${filePath}.deleting-${id}-${Date.now()}`;
+                fs.renameSync(filePath, stagedPath);
+                stagedFiles.push({ originalPath: filePath, stagedPath });
+            }
         }
 
-        if (fs.existsSync(thumbPath)) {
-            fs.unlinkSync(thumbPath);
-        }
+        const deleteMedia = db.transaction((photoId: number) => {
+            db.prepare("DELETE FROM photo_likes WHERE photo_id = ?").run(photoId);
+            db.prepare("DELETE FROM photos WHERE id = ?").run(photoId);
+        });
 
-        // Briše zapis iz baze podataka
-        db.prepare(
-            `
-            DELETE FROM photos
-            WHERE id = ?
-        `
-        ).run(id);
+        deleteMedia(id);
+
+        for (const stagedFile of stagedFiles) {
+            try {
+                fs.unlinkSync(stagedFile.stagedPath);
+            } catch (cleanupError) {
+                console.error("Privremeni obrisani fajl nije uklonjen:", stagedFile.stagedPath, cleanupError);
+            }
+        }
 
         res.json({
             message: "Slika je obrisana.",
             id
         });
     } catch (error) {
+        for (const stagedFile of [...stagedFiles].reverse()) {
+            try {
+                if (fs.existsSync(stagedFile.stagedPath) && !fs.existsSync(stagedFile.originalPath)) {
+                    fs.renameSync(stagedFile.stagedPath, stagedFile.originalPath);
+                }
+            } catch (restoreError) {
+                console.error("Greška pri vraćanju fajla nakon neuspelog brisanja:", stagedFile, restoreError);
+            }
+        }
+
         console.error("Greška pri brisanju slike:", error);
 
         res.status(500).json({
@@ -1253,6 +1642,23 @@ app.get("/api/admin/download/photos", requireAdmin, (req, res) => {
         zlib: { level: 9 } // Maksimalni nivo kompresije
     });
 
+    archive.on("warning", (error: NodeJS.ErrnoException) => {
+        if (error.code === "ENOENT") {
+            console.warn("ZIP preskače fajl koji ne postoji:", error.message);
+            return;
+        }
+        archive.emit("error", error);
+    });
+    archive.on("error", (error: Error) => {
+        console.error("Greška pri pravljenju ZIP arhive fotografija:", error);
+        res.destroy(error);
+    });
+    res.on("close", () => {
+        if (!res.writableEnded) {
+            archive.abort();
+        }
+    });
+
     archive.pipe(res); // Šalje sadržaj arhive direktno kao HTTP odgovor
 
     // Dodaje svaki fajl koji postoji na disku u arhivu
@@ -1264,7 +1670,10 @@ app.get("/api/admin/download/photos", requireAdmin, (req, res) => {
         }
     });
 
-    archive.finalize(); // Zatvara arhivu i završava stream
+    void archive.finalize().catch((error: Error) => {
+        console.error("ZIP arhiva fotografija nije završena:", error);
+        res.destroy(error);
+    });
 });
 
 // ============================================================
@@ -1291,6 +1700,23 @@ app.get("/api/admin/download/videos", requireAdmin, (req, res) => {
         zlib: { level: 9 }
     });
 
+    archive.on("warning", (error: NodeJS.ErrnoException) => {
+        if (error.code === "ENOENT") {
+            console.warn("ZIP preskače fajl koji ne postoji:", error.message);
+            return;
+        }
+        archive.emit("error", error);
+    });
+    archive.on("error", (error: Error) => {
+        console.error("Greška pri pravljenju ZIP arhive videa:", error);
+        res.destroy(error);
+    });
+    res.on("close", () => {
+        if (!res.writableEnded) {
+            archive.abort();
+        }
+    });
+
     archive.pipe(res);
 
     videos.forEach((video) => {
@@ -1301,7 +1727,10 @@ app.get("/api/admin/download/videos", requireAdmin, (req, res) => {
         }
     });
 
-    archive.finalize();
+    void archive.finalize().catch((error: Error) => {
+        console.error("ZIP arhiva videa nije završena:", error);
+        res.destroy(error);
+    });
 });
 
 // ============================================================
@@ -1373,20 +1802,41 @@ server.on("error", (error) => {
 // ============================================================
 // GRACEFUL SHUTDOWN - uredno gašenje servera
 // ============================================================
-// Kada server dobije signal za gašenje (npr. od Docker-a ili sistema),
-// prvo prestaje da prima nove konekcije, zatvara bazu, pa se tek onda gasi proces
-process.on("SIGTERM", () => {
-    console.log("SIGTERM primljen");
-    server.close(() => {
+let isShuttingDown = false;
+
+async function gracefulShutdown(signal: string) {
+    if (isShuttingDown) {
+        return;
+    }
+
+    isShuttingDown = true;
+    console.log(`${signal} primljen`);
+
+    try {
+        await new Promise<void>((resolve, reject) => {
+            server.close((error) => {
+                if (error) {
+                    reject(error);
+                    return;
+                }
+                resolve();
+            });
+        });
+
+        await Promise.allSettled([aiQueue, videoQueue]);
         db.close();
+        sessionStore.close();
         process.exit(0);
-    });
+    } catch (error) {
+        console.error("Greška tokom gašenja servera:", error);
+        process.exit(1);
+    }
+}
+
+process.on("SIGTERM", () => {
+    void gracefulShutdown("SIGTERM");
 });
 
 process.on("SIGINT", () => {
-    console.log("SIGINT primljen"); // Obično Ctrl+C u terminalu
-    server.close(() => {
-        db.close();
-        process.exit(0);
-    });
+    void gracefulShutdown("SIGINT");
 });
