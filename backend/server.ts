@@ -1,18 +1,36 @@
-import express from "express";
-import cors from "cors";
-import multer from "multer";
-import rateLimit from "express-rate-limit";
-import path from "path";
-import fs from "fs";
-import { fileURLToPath } from "url";
-import sharp from "sharp";
-import Database from "better-sqlite3";
-import { execFile } from "child_process";
-import { moderateImage } from "./moderation.js";
-import { createRequire } from "module";
-import bcrypt from "bcrypt";
-import session from "express-session";
+// ============================================================
+// UČITAVANJE .ENV FAJLA - MORA biti pre svih ostalih importa/koda
+// ============================================================
+// dotenv čita .env fajl iz root-a projekta i ubacuje vrednosti u process.env.
+// Ovo mora ići na samom vrhu fajla, pre nego što se process.env bilo gde koristi,
+// jer sve ostale konstante (npr. ADMIN_EMAIL) čitaju process.env odmah pri importu.
+import dotenv from "dotenv";
 
+dotenv.config();
+
+// ============================================================
+// IMPORTI - eksterne biblioteke i moduli koji se koriste u aplikaciji
+// ============================================================
+import express from "express";              // Web framework za kreiranje HTTP servera i ruta
+import cors from "cors";                     // Middleware za kontrolu Cross-Origin zahteva (CORS)
+import multer from "multer";                 // Middleware za upload fajlova (multipart/form-data)
+import rateLimit from "express-rate-limit";  // Middleware za ograničavanje broja zahteva (anti-spam/anti-brute-force)
+import path from "path";                     // Node.js modul za rad sa putanjama fajlova
+import fs from "fs";                         // Node.js modul za rad sa fajl sistemom
+import { fileURLToPath } from "url";         // Pomoćna funkcija za dobijanje putanje fajla iz ESM import.meta.url
+import sharp from "sharp";                   // Biblioteka za obradu i konverziju slika (resize, rotate, kompresija)
+import Database from "better-sqlite3";       // Sinhrona SQLite biblioteka za rad sa bazom podataka
+import { execFile } from "child_process";    // Node.js modul za pokretanje eksternih programa (mail, ffmpeg)
+import { moderateImage } from "./moderation.js"; // Lokalni modul - AI moderacija slika (detekcija neprikladnog sadržaja)
+import { createRequire } from "module";      // Omogućava korišćenje CommonJS require() unutar ESM modula
+import bcrypt from "bcrypt";                 // Biblioteka za heširanje i proveru lozinki
+import session from "express-session";       // Middleware za upravljanje sesijama (login admin panela)
+
+// ============================================================
+// TYPESCRIPT DEKLARACIJA - proširenje tipa sesije
+// ============================================================
+// Dodaje custom polja (adminId, username) u SessionData tip
+// da bi TypeScript znao da ova polja postoje u req.session
 declare module "express-session" {
     interface SessionData {
         adminId?: number;
@@ -20,23 +38,56 @@ declare module "express-session" {
     }
 }
 
-const require = createRequire(import.meta.url);
-const archiver = require("archiver");
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// ============================================================
+// SETUP ZA CommonJS BIBLIOTEKE U ESM OKRUŽENJU
+// ============================================================
+const require = createRequire(import.meta.url); // Kreira require() funkciju za CommonJS pakete (archiver nema dobru ESM podršku)
+const archiver = require("archiver");            // Biblioteka za kreiranje ZIP arhiva (download svih slika/videa odjednom)
+const __filename = fileURLToPath(import.meta.url); // Putanja trenutnog fajla (ESM ekvivalent CommonJS __filename)
+const __dirname = path.dirname(__filename);        // Direktorijum trenutnog fajla (ESM ekvivalent CommonJS __dirname)
 
+// ============================================================
+// INICIJALIZACIJA EXPRESS APLIKACIJE
+// ============================================================
 const app = express();
 
-app.disable("x-powered-by");
+app.disable("x-powered-by"); // Bezbednosna mera - ne otkriva se da je backend napisan u Express-u
 
-const PORT = Number(process.env.PORT) || 3000;
+const PORT = Number(process.env.PORT) || 3000; // Port servera - iz env varijable ili default 3000
 
-const ADMIN_EMAIL = "example@gmail.com";
-const ADMIN_PANEL_URL = "http://192.168.1.2/admin.html";
+/**
+ * Pomoćna funkcija koja čita obaveznu environment varijablu.
+ * Ako varijabla nije definisana u .env fajlu, baca grešku i
+ * server odbija da se pokrene - bolje da padne odmah na startu
+ * nego da radi sa praznim/pogrešnim vrednostima (npr. bez admin emaila).
+ */
+function getRequiredEnv(name: string): string {
+    const value = process.env[name];
 
+    if (!value) {
+        throw new Error(`${name} mora biti definisan u .env fajlu.`);
+    }
+
+    return value;
+}
+
+// ============================================================
+// KONFIGURACIJA ZA ADMIN EMAIL NOTIFIKACIJE
+// ============================================================
+// Ove vrednosti se sada čitaju iz .env fajla umesto da su hardkodovane u kodu
+const ADMIN_EMAIL = getRequiredEnv("ADMIN_EMAIL");           // Email adresa administratora koji dobija notifikacije
+const ADMIN_PANEL_URL = getRequiredEnv("ADMIN_PANEL_URL");   // Link ka admin panelu koji se šalje u emailu
+
+/**
+ * Funkcija koja šalje email notifikaciju administratoru kada
+ * neka fotografija/video zahteva ručni pregled (pending_review).
+ * Koristi lokalni "mail" komandni program (execFile) umesto
+ * SMTP biblioteke - vrv se oslanja na sistemski mail transfer agent.
+ */
 function sendPendingReviewEmail(photoId: number, filename: string) {
     const subject = "Wedding app: fotografija čeka pregled";
 
+    // Sadržaj email poruke sa ID-jem fajla, imenom i linkom ka admin panelu
     const body = `
 Nova fotografija je poslata na pregled.
 
@@ -49,6 +100,7 @@ ${ADMIN_PANEL_URL}
 Ovo je automatska poruka.
 `;
 
+    // Pokreće se sistemska "mail" komanda sa subjektom i primaocem kao argumentima
     const mailProcess = execFile("mail", ["-s", subject, ADMIN_EMAIL], (error) => {
         if (error) {
             console.error("Greška pri slanju email notifikacije:", error);
@@ -58,12 +110,19 @@ Ovo je automatska poruka.
         console.log("Email notifikacija poslata za pending_review:", photoId);
     });
 
+    // Telo emaila se piše direktno u standard input procesa "mail"
     mailProcess.stdin?.write(body);
     mailProcess.stdin?.end();
 }
 
+// Kaže Express-u da veruje proxy serveru ispred aplikacije (npr. nginx)
+// Bitno za ispravno čitanje IP adresa i "secure" cookie-ja iza reverse proxy-ja
 app.set("trust proxy", 1);
 
+// ============================================================
+// CORS KONFIGURACIJA
+// ============================================================
+// Definiše koji frontend domeni smeju da pristupaju ovom API-ju
 app.use(
     cors({
         origin: [
@@ -72,52 +131,65 @@ app.use(
             "http://localhost",
             "http://localhost:3000"
         ],
-        methods: ["GET", "POST", "PATCH", "DELETE"],
-        credentials: true
+        methods: ["GET", "POST", "PATCH", "DELETE"], // Dozvoljeni HTTP metodi
+        credentials: true // Dozvoljava slanje kolačića (cookies) preko CORS-a - neophodno za sesije
     })
 );
 
-app.use(express.json());
+app.use(express.json()); // Middleware koji parsira JSON telo zahteva u req.body
+
+// ============================================================
+// SESSION MIDDLEWARE (za admin login)
+// ============================================================
 app.use(
     session({
-        name: "wedding_admin_sid",
-        secret: process.env.SESSION_SECRET || "change-this-secret-before-production",
-        resave: false,
-        saveUninitialized: false,
+        name: "wedding_admin_sid",                                  // Ime cookie-ja u kom se čuva session ID
+        secret: process.env.SESSION_SECRET || "change-this-secret-before-production", // Tajni ključ za potpisivanje session cookie-ja
+        resave: false,           // Ne snima sesiju nazad ako nije menjana
+        saveUninitialized: false, // Ne kreira sesiju dok se nešto ne upiše u nju
         cookie: {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === "production",
-            sameSite: "lax",
-            maxAge: 1000 * 60 * 60 * 12
+            httpOnly: true,                              // Cookie nije dostupan iz JavaScript-a (zaštita od XSS)
+            secure: process.env.NODE_ENV === "production", // Cookie se šalje samo preko HTTPS-a u produkciji
+            sameSite: "lax",                              // Zaštita od CSRF napada
+            maxAge: 1000 * 60 * 60 * 12                   // Trajanje sesije: 12 sati
         }
     })
 );
 
+// ============================================================
+// RATE LIMITERI - ograničavanje broja zahteva
+// ============================================================
+// Ograničava broj upload zahteva po IP adresi (sprečava zloupotrebu/flooding)
 const uploadLimiter = rateLimit({
-    windowMs: 60 * 1000,
-    max: 200,
+    windowMs: 60 * 1000, // Vremenski prozor od 1 minuta
+    max: 200,            // Maksimalno 200 zahteva u tom prozoru
     message: {
         error: "Previše zahteva. Pokušajte ponovo kasnije."
     }
 });
 
+// Strožiji limiter za pokušaje admin logina (zaštita od brute-force napada)
 const adminLoginLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: 5,
+    windowMs: 15 * 60 * 1000, // Vremenski prozor od 15 minuta
+    max: 5,                    // Maksimalno 5 pokušaja logina u tom prozoru
     message: {
         error: "Previše pokušaja prijave. Pokušajte ponovo za 15 minuta."
     },
-    standardHeaders: true,
-    legacyHeaders: false
+    standardHeaders: true,  // Dodaje standardne RateLimit-* header-e u odgovor
+    legacyHeaders: false    // Isključuje stare X-RateLimit-* header-e
 });
 
-const uploadFolderOriginal = path.join(__dirname, "../../uploads/original");
-const uploadFolderThumbs = path.join(__dirname, "../../uploads/thumbs");
-const uploadFolderVideosOriginal = path.join(__dirname, "../../uploads/videos/original");
-const uploadFolderVideosThumbs = path.join(__dirname, "../../uploads/videos/thumbs");
-const uploadFolderVideosWeb = path.join(__dirname, "../../uploads/videos/web");
-const dbPath = path.join(__dirname, "../../database.sqlite");
+// ============================================================
+// PUTANJE ZA FAJLOVE I BAZU PODATAKA
+// ============================================================
+const uploadFolderOriginal = path.join(__dirname, "../../uploads/original");           // Originalne slike
+const uploadFolderThumbs = path.join(__dirname, "../../uploads/thumbs");               // Thumbnail-ovi slika
+const uploadFolderVideosOriginal = path.join(__dirname, "../../uploads/videos/original"); // Originalni video fajlovi
+const uploadFolderVideosThumbs = path.join(__dirname, "../../uploads/videos/thumbs");     // Thumbnail-ovi (frame) videa
+const uploadFolderVideosWeb = path.join(__dirname, "../../uploads/videos/web");           // Web-optimizovane verzije videa
+const dbPath = path.join(__dirname, "../../database.sqlite");                             // Putanja do SQLite baze
 
+// Kreira potrebne foldere ako ne postoje (da aplikacija ne pukne pri prvom pokretanju)
 if (!fs.existsSync(uploadFolderOriginal)) {
     fs.mkdirSync(uploadFolderOriginal, { recursive: true });
 }
@@ -138,12 +210,16 @@ if (!fs.existsSync(uploadFolderVideosThumbs)) {
     fs.mkdirSync(uploadFolderVideosThumbs, { recursive: true });
 }
 
+// ============================================================
+// INICIJALIZACIJA BAZE PODATAKA (SQLite)
+// ============================================================
 const db = new Database(dbPath);
 
-db.pragma("journal_mode = WAL");
-db.pragma("synchronous = NORMAL");
-db.pragma("busy_timeout = 5000");
+db.pragma("journal_mode = WAL");    // Write-Ahead Logging - bolje performanse i paralelno čitanje/pisanje
+db.pragma("synchronous = NORMAL");  // Balans između performansi i sigurnosti podataka
+db.pragma("busy_timeout = 5000");   // Čeka do 5 sekundi ako je baza zauzeta pre nego što baci grešku
 
+// Kreira tabelu "photos" ako ne postoji - glavna tabela za slike/video
 db.exec(`
     CREATE TABLE IF NOT EXISTS photos (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -157,21 +233,30 @@ db.exec(`
     );
 `);
 
+// ============================================================
+// MIGRACIJE ŠEME - dodavanje novih kolona ako ne postoje
+// ============================================================
+// Ovo omogućava da se aplikacija ažurira bez brisanja postojeće baze -
+// proverava se koje kolone već postoje i dodaju se samo one koje nedostaju
+
 const existingColumns = db.prepare(`PRAGMA table_info(photos)`).all() as { name: string }[];
 
 const hasAiScore = existingColumns.some((col) => col.name === "ai_score");
 const hasAiReason = existingColumns.some((col) => col.name === "ai_reason");
 
+// ai_score - numerička ocena AI moderacije (koliko je sadržaj "rizičan")
 if (!hasAiScore) {
     db.exec(`ALTER TABLE photos ADD COLUMN ai_score INTEGER NOT NULL DEFAULT 0`);
 }
 
+// ai_reason - tekstualno obrazloženje zašto je AI označio sliku/video na određeni način
 if (!hasAiReason) {
     db.exec(`ALTER TABLE photos ADD COLUMN ai_reason TEXT NOT NULL DEFAULT ''`);
 }
 
 const hasMediaType = existingColumns.some((col) => col.name === "media_type");
 
+// media_type - da li je fajl "image" ili "video"
 if (!hasMediaType) {
     db.exec(`
         ALTER TABLE photos
@@ -181,6 +266,7 @@ if (!hasMediaType) {
 
 const hasWebUrl = existingColumns.some((col) => col.name === "web_url");
 
+// web_url - putanja do web-optimizovane (komprimovane) verzije videa za striming/pregled
 if (!hasWebUrl) {
     db.exec(`
         ALTER TABLE photos
@@ -192,6 +278,7 @@ if (!hasWebUrl) {
 
 const hasLikes = existingColumns.some((col) => col.name === "likes");
 
+// likes - brojač lajkova po fotografiji/videu
 if (!hasLikes) {
     db.exec(`
         ALTER TABLE photos
@@ -201,6 +288,8 @@ if (!hasLikes) {
     console.log("Dodata kolona likes");
 }
 
+// Tabela koja beleži KO je (po client_id) lajkovao KOJU fotografiju,
+// da bi se sprečilo višestruko lajkovanje sa istog uređaja
 db.exec(`
     CREATE TABLE IF NOT EXISTS photo_likes (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -211,6 +300,7 @@ db.exec(`
     );
 `);
 
+// Tabela administratora (za login u admin panel)
 db.exec(`
     CREATE TABLE IF NOT EXISTS admins (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -220,6 +310,10 @@ db.exec(`
     );
 `);
 
+// ============================================================
+// KREIRANJE PODRAZUMEVANOG ADMINISTRATORA
+// ============================================================
+// Proverava da li već postoji admin korisnik "admin" u bazi
 const adminExists = db
     .prepare(
         `
@@ -230,8 +324,10 @@ const adminExists = db
     )
     .get("admin");
 
+// Ako ne postoji, kreira ga sa podrazumevanom lozinkom (heširanom pomoću bcrypt)
+// NAPOMENA: ovu lozinku treba promeniti odmah nakon prvog pokretanja u produkciji
 if (!adminExists) {
-    const passwordHash = bcrypt.hashSync("PromeniMe123!", 12);
+    const passwordHash = bcrypt.hashSync("PromeniMe123!", 12); // 12 = broj bcrypt "rounds" (jačina heša)
 
     db.prepare(
         `
@@ -247,10 +343,19 @@ if (!adminExists) {
     console.log("Kreiran podrazumevani administrator.");
 }
 
+// ============================================================
+// STATIČKI FAJLOVI - direktno serviranje uploadovanih slika/videa
+// ============================================================
+// Sve iz foldera "uploads" postaje dostupno preko /uploads/... URL putanje
 app.use("/uploads", express.static(path.join(__dirname, "../../uploads")));
 
+// ============================================================
+// MULTER KONFIGURACIJA - upload fajlova
+// ============================================================
+// Definiše GDE i POD KOJIM IMENOM se sačuvava uploadovani fajl
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
+        // Video fajlovi idu u poseban folder od slika
         if (file.mimetype.startsWith("video/")) {
             cb(null, uploadFolderVideosOriginal);
             return;
@@ -259,6 +364,8 @@ const storage = multer.diskStorage({
         cb(null, uploadFolderOriginal);
     },
     filename: (req, file, cb) => {
+        // Generiše jedinstveno ime fajla: timestamp + random broj + originalna ekstenzija
+        // (sprečava kolizije imena i prepisivanje postojećih fajlova)
         const uniqueName =
             Date.now() + "-" + Math.round(Math.random() * 1e9) + path.extname(file.originalname).toLowerCase();
 
@@ -266,6 +373,8 @@ const storage = multer.diskStorage({
     }
 });
 
+// Filter koji proverava da li je fajl dozvoljenog tipa (slika ili video)
+// pre nego što se upload uopšte prihvati - proverava i MIME tip i ekstenziju
 const fileFilter = (req: any, file: Express.Multer.File, cb: Function) => {
     const allowedImageExtensions = [".jpg", ".jpeg", ".png", ".webp", ".gif"];
     const allowedVideoExtensions = [".mp4", ".mov", ".webm", ".avi", ".mkv"];
@@ -277,44 +386,57 @@ const fileFilter = (req: any, file: Express.Multer.File, cb: Function) => {
     const isVideo = file.mimetype.startsWith("video/") && allowedVideoExtensions.includes(ext);
 
     if (isImage || isVideo) {
-        cb(null, true);
+        cb(null, true); // Fajl je prihvaćen
         return;
     }
 
-    cb(new Error("Dozvoljene su samo slike i video fajlovi"), false);
+    cb(new Error("Dozvoljene su samo slike i video fajlovi"), false); // Fajl je odbijen
 };
 
+// Kreira multer instancu sa definisanim storage-om, filterom i limitom veličine fajla
 const upload = multer({
     storage,
     fileFilter,
     limits: {
-        fileSize: 500 * 1024 * 1024
+        fileSize: 500 * 1024 * 1024 // Maksimalna veličina fajla: 500 MB
     }
 });
 
+// ============================================================
+// AI MODERACIJA - RED ČEKANJA (QUEUE) ZA OBRADU SLIKA
+// ============================================================
+// Ovo garantuje da se AI moderacija slika izvršava JEDNA PO JEDNA (sekvencijalno),
+// a ne paralelno za sve upload-ovane slike istovremeno (štedi resurse/API pozive)
 let aiJobCounter = 0;
-let aiQueue = Promise.resolve();
+let aiQueue = Promise.resolve(); // "Rep" (tail) promise-a koji predstavlja trenutni kraj reda
 
 function runAiModerationQueued(filePath: string) {
-    const jobId = ++aiJobCounter;
+    const jobId = ++aiJobCounter; // Jedinstveni ID posla radi logovanja
 
     console.log("AI queue čeka:", jobId, path.basename(filePath));
 
+    // Novi posao se "kači" na prethodni u nizu - izvršiće se tek kad se prethodni završi
     const job = aiQueue.then(async () => {
         console.log("AI queue počinje:", jobId, path.basename(filePath));
 
-        const result = await moderateImage(filePath);
+        const result = await moderateImage(filePath); // Poziv AI moderacije (eksterni modul)
 
         console.log("AI queue završena:", jobId, path.basename(filePath), result.status, result.aiScore);
 
         return result;
     });
 
+    // Ažurira "rep" reda na trenutni posao (bez obzira na uspeh/neuspeh - catch hvata grešku da ne blokira red)
     aiQueue = job.then(() => undefined).catch(() => undefined);
 
     return job;
 }
 
+// ============================================================
+// VIDEO OBRADA - RED ČEKANJA (QUEUE) ZA FFMPEG POSLOVE
+// ============================================================
+// Isti princip kao AI queue - video obrada (konverzija/thumbnail) ide sekvencijalno
+// jer je ffmpeg resursno zahtevan (CPU/memorija) pa se ne žele paralelni poslovi
 let videoQueue = Promise.resolve();
 
 function enqueueVideoJob(job: () => Promise<void>) {
@@ -325,6 +447,7 @@ function enqueueVideoJob(job: () => Promise<void>) {
     return videoQueue;
 }
 
+// Pokreće ffmpeg komandu preko "nice" (niži prioritet procesa da ne uguši server)
 function runNiceFfmpeg(args: string[]) {
     return new Promise<void>((resolve, reject) => {
         execFile("nice", ["-n", "10", "ffmpeg", ...args], (error) => {
@@ -340,6 +463,7 @@ function runNiceFfmpeg(args: string[]) {
 
 let videoJobCounter = 0;
 
+// Stavlja video obradu u red čekanja i pokreće je kad dođe na red
 function processVideoInBackground(photoId: number, filePath: string, filename: string) {
     const jobId = ++videoJobCounter;
 
@@ -354,6 +478,8 @@ function processVideoInBackground(photoId: number, filePath: string, filename: s
     });
 }
 
+// Stvarna obrada videa: generiše thumbnail (jedan frame) i web-optimizovanu verziju,
+// pa ažurira bazu sa novim putanjama nakon završetka obrade
 async function processVideoJob(photoId: number, filePath: string, filename: string) {
     const videoThumbName = filename + ".jpg";
     const videoThumbPath = path.join(uploadFolderVideosThumbs, videoThumbName);
@@ -366,42 +492,45 @@ async function processVideoJob(photoId: number, filePath: string, filename: stri
 
     console.log("Pokrećem queued video obradu:", photoId, filename);
 
+    // 1. korak: izvlači jedan frame iz videa (na 1. sekundi) i pravi kvadratni (400x400) thumbnail
     await runNiceFfmpeg([
-        "-y",
+        "-y",                // Automatski prepiše fajl ako već postoji
         "-i",
-        filePath,
+        filePath,            // Ulazni video fajl
         "-ss",
-        "00:00:01",
+        "00:00:01",          // Pozicija u videu sa koje se uzima frame (1. sekunda)
         "-vframes",
-        "1",
+        "1",                 // Uzima samo 1 frame
         "-vf",
-        "scale=400:400:force_original_aspect_ratio=increase,crop=400:400",
+        "scale=400:400:force_original_aspect_ratio=increase,crop=400:400", // Skalira i seče sliku na 400x400
         videoThumbPath
     ]);
 
+    // 2. korak: konvertuje video u web-optimizovan format (H.264 + AAC, manja rezolucija/bitrate)
     await runNiceFfmpeg([
         "-y",
         "-i",
         filePath,
         "-vf",
-        "scale='min(1280,iw)':-2",
+        "scale='min(1280,iw)':-2", // Smanjuje širinu na max 1280px, čuvajući odnos stranica
         "-c:v",
-        "libx264",
+        "libx264",       // Video kodek
         "-preset",
-        "fast",
+        "fast",          // Brzina enkodiranja (kompromis brzina/kompresija)
         "-crf",
-        "28",
+        "28",            // Kvalitet kompresije (veći broj = manji fajl, niži kvalitet)
         "-movflags",
-        "+faststart",
+        "+faststart",    // Omogućava da video počne da se plejuje pre potpunog preuzimanja
         "-c:a",
-        "aac",
+        "aac",           // Audio kodek
         "-b:a",
-        "128k",
+        "128k",          // Audio bitrate
         "-threads",
-        "2",
+        "2",             // Ograničava broj CPU niti koje ffmpeg koristi
         webVideoPath
     ]);
 
+    // Nakon obrade, ažurira bazu sa putanjama do thumbnail-a i web verzije videa
     db.prepare(
         `
         UPDATE photos
@@ -416,6 +545,10 @@ async function processVideoJob(photoId: number, filePath: string, filename: stri
     console.log("Queued video obrada završena:", photoId);
 }
 
+// ============================================================
+// MIDDLEWARE ZA ZAŠTITU ADMIN RUTA
+// ============================================================
+// Proverava da li postoji aktivna admin sesija pre nego što dozvoli pristup ruti
 function requireAdmin(req: express.Request, res: express.Response, next: express.NextFunction) {
     if (!req.session.adminId) {
         return res.status(401).json({
@@ -426,6 +559,9 @@ function requireAdmin(req: express.Request, res: express.Response, next: express
     next();
 }
 
+// ============================================================
+// RUTA: POST /api/upload - upload slike ili videa
+// ============================================================
 app.post("/api/upload", uploadLimiter, upload.single("photo"), async (req, res) => {
     const file = req.file;
 
@@ -437,6 +573,7 @@ app.post("/api/upload", uploadLimiter, upload.single("photo"), async (req, res) 
 
     const ext = path.extname(file.originalname).toLowerCase();
 
+    // Utvrđuje da li je fajl video (po MIME tipu ili ekstenziji, kao dodatna provera)
     const isVideo = file.mimetype.startsWith("video/") || [".mp4", ".mov", ".webm", ".avi", ".mkv"].includes(ext);
 
     const mediaType = isVideo ? "video" : "image";
@@ -452,6 +589,8 @@ app.post("/api/upload", uploadLimiter, upload.single("photo"), async (req, res) 
         let aiReason = "";
 
         if (isVideo) {
+            // Za video: obrada (thumbnail + konverzija) se radi u pozadini (queue),
+            // pa se video odmah stavlja u status "pending_review" dok ne prođe ručni pregled
             originalUrl = `/uploads/videos/original/${file.filename}`;
             thumbUrl = "";
             webUrl = "";
@@ -460,15 +599,18 @@ app.post("/api/upload", uploadLimiter, upload.single("photo"), async (req, res) 
             aiScore = 0;
             aiReason = "Video fajl - obrada u toku, ručni pregled potreban";
         } else {
+            // Za sliku: sinhrona obrada odmah pri uploadu
             const thumbPath = path.join(uploadFolderThumbs, file.filename);
 
+            // Ispravlja orijentaciju slike (EXIF rotate) i re-enkodira u JPEG visokog kvaliteta
             await sharp(file.path)
                 .rotate()
                 .jpeg({ quality: 95 })
                 .toFile(file.path + ".fixed");
 
-            fs.renameSync(file.path + ".fixed", file.path);
+            fs.renameSync(file.path + ".fixed", file.path); // Zamenjuje original ispravljenom verzijom
 
+            // Pravi kvadratni thumbnail (400x400, "cover" - seče višak da ispuni kvadrat)
             await sharp(file.path)
                 .resize({
                     width: 400,
@@ -481,13 +623,15 @@ app.post("/api/upload", uploadLimiter, upload.single("photo"), async (req, res) 
             originalUrl = `/uploads/original/${file.filename}`;
             thumbUrl = `/uploads/thumbs/${file.filename}`;
 
+            // Pokreće AI moderaciju slike (u redu čekanja) - određuje da li je slika prikladna
             const moderation = await runAiModerationQueued(file.path);
 
-            status = moderation.status;
-            aiScore = moderation.aiScore;
-            aiReason = moderation.aiReason;
+            status = moderation.status;       // npr. "approved" ili "pending_review"
+            aiScore = moderation.aiScore;     // numerička ocena AI-ja
+            aiReason = moderation.aiReason;   // razlog/obrazloženje AI ocene
         }
 
+        // Upisuje novi zapis u bazu podataka sa svim informacijama o fajlu
         const insertResult = db
             .prepare(
                 `
@@ -518,14 +662,17 @@ app.post("/api/upload", uploadLimiter, upload.single("photo"), async (req, res) 
 
         const insertedId = Number(insertResult.lastInsertRowid);
 
+        // Ako fajl čeka pregled, šalje email obaveštenje administratoru
         if (status === "pending_review") {
             sendPendingReviewEmail(insertedId, file.filename);
         }
 
+        // Ako je video, pokreće se pozadinska obrada (thumbnail + konverzija)
         if (isVideo) {
             processVideoInBackground(insertedId, file.path, file.filename);
         }
 
+        // Vraća odgovor klijentu sa informacijama o uploadovanom fajlu
         res.json({
             message: isVideo
                 ? "Video je uploadovan i obrada je pokrenuta u pozadini."
@@ -538,6 +685,7 @@ app.post("/api/upload", uploadLimiter, upload.single("photo"), async (req, res) 
             status
         });
     } catch (error) {
+        // U slučaju greške, briše sve delimično kreirane fajlove (originalni, .fixed privremeni, thumbnail)
         console.error("Greška pri obradi fajla:", error);
 
         const cleanupPaths = [file.path, file.path + ".fixed", path.join(uploadFolderThumbs, file.filename)];
@@ -552,6 +700,7 @@ app.post("/api/upload", uploadLimiter, upload.single("photo"), async (req, res) 
             }
         }
 
+        // Proverava da li je greška vezana za nevalidan/oštećen fajl (da vrati 400 umesto 500)
         const errorMessage = error instanceof Error ? error.message.toLowerCase() : "";
 
         const invalidMedia =
@@ -572,11 +721,15 @@ app.post("/api/upload", uploadLimiter, upload.single("photo"), async (req, res) 
     }
 });
 
+// ============================================================
+// RUTA: GET /api/photos - javna lista odobrenih slika/videa (sa paginacijom)
+// ============================================================
 app.get("/api/photos", (req, res) => {
-    const page = Math.max(Number(req.query.page) || 1, 1);
-    const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 100);
+    const page = Math.max(Number(req.query.page) || 1, 1);          // Broj stranice (min 1)
+    const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 100); // Broj rezultata po stranici (1-100)
     const offset = (page - 1) * limit;
 
+    // Vraća samo fotografije/videe sa statusom "approved", sortirane od najnovijih
     const photos = db
         .prepare(
             `
@@ -598,6 +751,7 @@ app.get("/api/photos", (req, res) => {
         )
         .all(limit, offset);
 
+    // Ukupan broj odobrenih fotografija (za izračunavanje "hasMore")
     const total = db
         .prepare(
             `
@@ -613,13 +767,17 @@ app.get("/api/photos", (req, res) => {
         page,
         limit,
         total: total.count,
-        hasMore: offset + photos.length < total.count
+        hasMore: offset + photos.length < total.count // Da li ima još stranica za učitavanje
     });
 });
 
+// ============================================================
+// RUTA: GET /api/photos/:id/download - preuzimanje originalnog fajla
+// ============================================================
 app.get("/api/photos/:id/download", (req, res) => {
     const id = Number(req.params.id);
 
+    // Pronalazi fotografiju/video po ID-ju, samo ako je odobrena (approved)
     const photo = db
         .prepare(
             `
@@ -646,6 +804,7 @@ app.get("/api/photos/:id/download", (req, res) => {
         });
     }
 
+    // Bira folder u zavisnosti od tipa medija (slika ili video)
     const filePath = path.join(
         photo.mediaType === "video" ? uploadFolderVideosOriginal : uploadFolderOriginal,
         photo.filename
@@ -657,6 +816,7 @@ app.get("/api/photos/:id/download", (req, res) => {
         });
     }
 
+    // Povećava brojač preuzimanja pre slanja fajla
     db.prepare(
         `
         UPDATE photos
@@ -665,12 +825,15 @@ app.get("/api/photos/:id/download", (req, res) => {
     `
     ).run(id);
 
-    return res.download(filePath, photo.filename);
+    return res.download(filePath, photo.filename); // Šalje fajl klijentu kao download
 });
 
+// ============================================================
+// RUTA: POST /api/photos/:id/like - lajkovanje fotografije/videa
+// ============================================================
 app.post("/api/photos/:id/like", (req, res) => {
     const id = Number(req.params.id);
-    const clientId = String(req.body.clientId || "").trim();
+    const clientId = String(req.body.clientId || "").trim(); // Jedinstveni identifikator uređaja/klijenta (šalje frontend)
 
     if (!clientId) {
         return res.status(400).json({
@@ -678,6 +841,7 @@ app.post("/api/photos/:id/like", (req, res) => {
         });
     }
 
+    // Proverava da li fotografija postoji i da li je odobrena
     const photo = db
         .prepare(
             `
@@ -696,6 +860,9 @@ app.post("/api/photos/:id/like", (req, res) => {
     }
 
     try {
+        // Pokušava da upiše lajk u photo_likes tabelu.
+        // Zbog UNIQUE(photo_id, client_id) ograničenja, isti client_id ne može
+        // da lajkuje istu fotografiju dva puta - drugi pokušaj baca grešku.
         db.prepare(
             `
             INSERT INTO photo_likes (
@@ -706,6 +873,7 @@ app.post("/api/photos/:id/like", (req, res) => {
         `
         ).run(id, clientId, new Date().toISOString());
 
+        // Ako je upis uspeo (prvi lajk sa ovog uređaja), povećava ukupan brojač lajkova
         db.prepare(
             `
             UPDATE photos
@@ -718,6 +886,7 @@ app.post("/api/photos/:id/like", (req, res) => {
         // ne radimo ništa. Jedan uređaj = jedan lajk.
     }
 
+    // Vraća trenutni (ažurirani ili nepromenjeni) broj lajkova
     const updated = db
         .prepare(
             `
@@ -735,6 +904,9 @@ app.post("/api/photos/:id/like", (req, res) => {
     });
 });
 
+// ============================================================
+// RUTA: POST /api/admin/login - prijava administratora
+// ============================================================
 app.post("/api/admin/login", adminLoginLimiter, async (req, res) => {
     const { username, password } = req.body;
 
@@ -744,6 +916,7 @@ app.post("/api/admin/login", adminLoginLimiter, async (req, res) => {
         });
     }
 
+    // Traži admina po username-u
     const admin = db
         .prepare(
             `
@@ -760,6 +933,7 @@ app.post("/api/admin/login", adminLoginLimiter, async (req, res) => {
         });
     }
 
+    // Poredi unetu lozinku sa heširanom lozinkom iz baze
     const validPassword = await bcrypt.compare(password, admin.password_hash);
 
     if (!validPassword) {
@@ -768,6 +942,7 @@ app.post("/api/admin/login", adminLoginLimiter, async (req, res) => {
         });
     }
 
+    // Uspešna prijava - čuva podatke u sesiji (session cookie se automatski šalje klijentu)
     req.session.adminId = admin.id;
     req.session.username = admin.username;
 
@@ -777,6 +952,9 @@ app.post("/api/admin/login", adminLoginLimiter, async (req, res) => {
     });
 });
 
+// ============================================================
+// RUTA: GET /api/admin/me - podaci o trenutno prijavljenom adminu
+// ============================================================
 app.get("/api/admin/me", requireAdmin, (req, res) => {
     res.json({
         id: req.session.adminId,
@@ -784,6 +962,9 @@ app.get("/api/admin/me", requireAdmin, (req, res) => {
     });
 });
 
+// ============================================================
+// RUTA: POST /api/admin/logout - odjava administratora
+// ============================================================
 app.post("/api/admin/logout", requireAdmin, (req, res) => {
     req.session.destroy((error) => {
         if (error) {
@@ -792,7 +973,7 @@ app.post("/api/admin/logout", requireAdmin, (req, res) => {
             });
         }
 
-        res.clearCookie("wedding_admin_sid");
+        res.clearCookie("wedding_admin_sid"); // Briše session cookie iz browsera
 
         res.json({
             success: true
@@ -800,6 +981,9 @@ app.post("/api/admin/logout", requireAdmin, (req, res) => {
     });
 });
 
+// ============================================================
+// RUTA: GET /api/admin/photos - admin lista SVIH slika/videa (bez obzira na status)
+// ============================================================
 app.get("/api/admin/photos", requireAdmin, (req, res) => {
     const photos = db
         .prepare(
@@ -830,10 +1014,15 @@ app.get("/api/admin/photos", requireAdmin, (req, res) => {
     `
         )
         .all();
+    // Sortira tako da prvo idu one koje čekaju pregled (najbitnije za admina),
+    // zatim odobrene, pa sakrivene, po najnovijim prvo unutar svake grupe
 
     res.json({ photos });
 });
 
+// ============================================================
+// RUTA: GET /api/admin/stats - statistika za admin dashboard
+// ============================================================
 app.get("/api/admin/stats", requireAdmin, (req, res) => {
     const stats = db
         .prepare(
@@ -852,6 +1041,9 @@ app.get("/api/admin/stats", requireAdmin, (req, res) => {
     res.json({ stats });
 });
 
+// ============================================================
+// RUTA: PATCH /api/admin/photos/:id/hide - sakrivanje fotografije/videa
+// ============================================================
 app.patch("/api/admin/photos/:id/hide", requireAdmin, (req, res) => {
     const id = Number(req.params.id);
 
@@ -878,9 +1070,14 @@ app.patch("/api/admin/photos/:id/hide", requireAdmin, (req, res) => {
     });
 });
 
+// ============================================================
+// RUTA: PATCH /api/admin/photos/:id/pending - vraćanje na status "čeka pregled"
+// ============================================================
 app.patch("/api/admin/photos/:id/pending", requireAdmin, (req, res) => {
     const id = Number(req.params.id);
 
+    // Prvo dohvata trenutni status da bi znao da li treba poslati email
+    // (ne šalje se ponovo email ako je fajl već bio u statusu pending_review)
     const photo = db
         .prepare(
             `
@@ -927,6 +1124,9 @@ app.patch("/api/admin/photos/:id/pending", requireAdmin, (req, res) => {
     });
 });
 
+// ============================================================
+// RUTA: PATCH /api/admin/photos/:id/approve - odobravanje fotografije/videa
+// ============================================================
 app.patch("/api/admin/photos/:id/approve", requireAdmin, (req, res) => {
     const id = Number(req.params.id);
 
@@ -953,9 +1153,13 @@ app.patch("/api/admin/photos/:id/approve", requireAdmin, (req, res) => {
     });
 });
 
+// ============================================================
+// RUTA: DELETE /api/admin/photos/:id - trajno brisanje fotografije/videa
+// ============================================================
 app.delete("/api/admin/photos/:id", requireAdmin, (req, res) => {
     const id = Number(req.params.id);
 
+    // Pronalazi fajl da bi znao putanje originala i thumbnaila za brisanje sa diska
     const photo = db
         .prepare(
             `
@@ -981,6 +1185,7 @@ app.delete("/api/admin/photos/:id", requireAdmin, (req, res) => {
         });
     }
 
+    // Bira odgovarajuće foldere u zavisnosti od tipa medija
     const originalPath = path.join(
         photo.mediaType === "video" ? uploadFolderVideosOriginal : uploadFolderOriginal,
         photo.filename
@@ -992,6 +1197,7 @@ app.delete("/api/admin/photos/:id", requireAdmin, (req, res) => {
     );
 
     try {
+        // Briše originalni fajl i thumbnail sa diska (ako postoje)
         if (fs.existsSync(originalPath)) {
             fs.unlinkSync(originalPath);
         }
@@ -1000,6 +1206,7 @@ app.delete("/api/admin/photos/:id", requireAdmin, (req, res) => {
             fs.unlinkSync(thumbPath);
         }
 
+        // Briše zapis iz baze podataka
         db.prepare(
             `
             DELETE FROM photos
@@ -1020,7 +1227,11 @@ app.delete("/api/admin/photos/:id", requireAdmin, (req, res) => {
     }
 });
 
+// ============================================================
+// RUTA: GET /api/admin/download/photos - preuzimanje SVIH odobrenih slika kao ZIP
+// ============================================================
 app.get("/api/admin/download/photos", requireAdmin, (req, res) => {
+    // Dohvata sve odobrene slike (ne i videe)
     const photos = db
         .prepare(
             `
@@ -1032,16 +1243,19 @@ app.get("/api/admin/download/photos", requireAdmin, (req, res) => {
         )
         .all() as { filename: string }[];
 
+    // Postavlja header-e da browser tretira odgovor kao download ZIP fajla
     res.setHeader("Content-Disposition", `attachment; filename="wedding-photos.zip"`);
 
     res.setHeader("Content-Type", "application/zip");
 
+    // Kreira ZIP arhivu u hodu (streaming) - ne pravi privremeni fajl na disku
     const archive = new archiver.ZipArchive({
-        zlib: { level: 9 }
+        zlib: { level: 9 } // Maksimalni nivo kompresije
     });
 
-    archive.pipe(res);
+    archive.pipe(res); // Šalje sadržaj arhive direktno kao HTTP odgovor
 
+    // Dodaje svaki fajl koji postoji na disku u arhivu
     photos.forEach((photo) => {
         const filePath = path.join(uploadFolderOriginal, photo.filename);
 
@@ -1050,10 +1264,14 @@ app.get("/api/admin/download/photos", requireAdmin, (req, res) => {
         }
     });
 
-    archive.finalize();
+    archive.finalize(); // Zatvara arhivu i završava stream
 });
 
+// ============================================================
+// RUTA: GET /api/admin/download/videos - preuzimanje SVIH odobrenih videa kao ZIP
+// ============================================================
 app.get("/api/admin/download/videos", requireAdmin, (req, res) => {
+    // Isti princip kao ruta za slike, samo za video fajlove
     const videos = db
         .prepare(
             `
@@ -1086,6 +1304,10 @@ app.get("/api/admin/download/videos", requireAdmin, (req, res) => {
     archive.finalize();
 });
 
+// ============================================================
+// RUTA: GET /api/health - health check (provera da li server radi)
+// ============================================================
+// Korisno za monitoring alate (npr. uptime robot, load balancer health check)
 app.get("/api/health", (req, res) => {
     res.json({
         status: "ok",
@@ -1094,9 +1316,15 @@ app.get("/api/health", (req, res) => {
     });
 });
 
+// ============================================================
+// GLOBALNI ERROR HANDLER MIDDLEWARE
+// ============================================================
+// Express prepoznaje ovu funkciju kao error handler zato što ima 4 parametra (err, req, res, next).
+// Hvata sve greške koje se dese u prethodnim middleware-ima/rutama (uključujući multer greške)
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
     console.error("ERROR:", err);
 
+    // Specifično rukovanje Multer greškama (upload)
     if (err instanceof multer.MulterError) {
         if (err.code === "LIMIT_FILE_SIZE") {
             return res.status(413).json({
@@ -1116,17 +1344,24 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
         });
     }
 
+    // Greška iz fileFilter-a (nedozvoljen tip fajla)
     if (err instanceof Error && err.message === "Dozvoljene su samo slike i video fajlovi") {
         return res.status(415).json({
             error: "Dozvoljene su samo slike i video fajlovi."
         });
     }
 
+    // Sve ostale neočekivane greške
     return res.status(500).json({
         error: "Internal server error"
     });
 });
 
+// ============================================================
+// POKRETANJE SERVERA
+// ============================================================
+// Server sluša SAMO na 127.0.0.1 (localhost) - podrazumeva se da je
+// ispred njega reverse proxy (npr. nginx) koji ga izlaže na internet
 const server = app.listen(PORT, "127.0.0.1", () => {
     console.log(`Server radi na portu ${PORT}`);
 });
@@ -1135,6 +1370,11 @@ server.on("error", (error) => {
     console.error("SERVER ERROR:", error);
 });
 
+// ============================================================
+// GRACEFUL SHUTDOWN - uredno gašenje servera
+// ============================================================
+// Kada server dobije signal za gašenje (npr. od Docker-a ili sistema),
+// prvo prestaje da prima nove konekcije, zatvara bazu, pa se tek onda gasi proces
 process.on("SIGTERM", () => {
     console.log("SIGTERM primljen");
     server.close(() => {
@@ -1144,7 +1384,7 @@ process.on("SIGTERM", () => {
 });
 
 process.on("SIGINT", () => {
-    console.log("SIGINT primljen");
+    console.log("SIGINT primljen"); // Obično Ctrl+C u terminalu
     server.close(() => {
         db.close();
         process.exit(0);
