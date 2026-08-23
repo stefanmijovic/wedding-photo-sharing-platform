@@ -1,0 +1,152 @@
+# ==========================
+
+# Node.js dependencies
+
+# ==========================
+
+node_modules/
+
+# ==========================
+
+# Package manager logs
+
+# ==========================
+
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ==========================
+
+# Environment variables
+
+# ==========================
+
+.env
+.env.*
+!.env.example
+
+# ==========================
+
+# Build output and coverage
+
+# ==========================
+
+dist/
+backend/dist/
+coverage/
+
+# ==========================
+
+# Databases and sessions
+
+# ==========================
+
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.sqlite-journal
+*.sqlite.backup*
+*.db
+*.db-shm
+*.db-wal
+sessions.sqlite
+sessions.sqlite-*
+
+# ==========================
+
+# Runtime media and private storage
+
+# ==========================
+
+uploads/original/*
+uploads/thumbs/*
+!uploads/original/.gitkeep
+!uploads/thumbs/.gitkeep
+uploads/videos/
+uploads/web/
+uploads/private/
+private/
+private-storage/
+voice-messages/
+
+# ==========================
+
+# Logs
+
+# ==========================
+
+*.log
+logs/
+
+# ==========================
+
+# Temporary and backup files
+
+# ==========================
+
+*~
+*.tmp
+*.temp
+*.bak
+*.swp
+*.swo
+*.orig
+*.backup*
+*.backup-before*
+backend/*.backup*
+
+# ==========================
+
+# Load testing
+
+# ==========================
+
+load-test/
+
+# ==========================
+
+# Project notes and local copies
+
+# ==========================
+
+struktura.txt
+
+# ==========================
+
+# Unused template files
+
+# ==========================
+
+frontend/lib/waypoints/links.php
+frontend/LICENSE.txt
+frontend/READ-ME.txt
+
+# ==========================
+
+# Bootstrap source files
+
+# ==========================
+
+frontend/scss/
+
+# ==========================
+
+# IDE and editor settings
+
+# ==========================
+
+.vscode/
+.idea/
+*.code-workspace
+
+# ==========================
+
+# Operating system files
+
+# ==========================
+
+.DS_Store
+Thumbs.db
+Desktop.ini

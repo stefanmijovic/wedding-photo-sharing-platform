@@ -1,0 +1,385 @@
+<!doctype html>
+<html lang="sr">
+    <head>
+        <meta charset="utf-8" />
+        <title>Wedding Photo Sharing Platform</title>
+        <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+        <meta name="description" content="Podelite i pregledajte fotografije i video uspomene sa venčanja." />
+
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link
+            href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@1,400;1,700&family=Cinzel:wght@500;600&family=Open+Sans:wght@400;500;600&family=Petit+Formal+Script&display=swap"
+            rel="stylesheet" />
+
+        <link
+            rel="preload"
+            href="lib/animate/animate.min.css"
+            as="style"
+            onload="this.onload=null;this.rel='stylesheet'" />
+        <noscript><link href="lib/animate/animate.min.css" rel="stylesheet" /></noscript>
+
+        <link href="css/bootstrap.min.css" rel="stylesheet" />
+
+        <link href="css/style.css?v=20260822-voice1" rel="stylesheet" />
+    </head>
+
+    <body data-bs-spy="scroll" data-bs-target="#navBar" id="weddingHome">
+
+        <div id="languageModal" class="language-modal">
+            <div class="language-modal-card">
+                <h2>Dobrodošli</h2>
+                <p>Willkommen / Welcome</p>
+
+                <div class="language-options">
+                    <button type="button" onclick="chooseLanguage('sr')">
+                        <span>🇷🇸</span>
+                        <strong>Srpski</strong>
+                    </button>
+
+                    <button type="button" onclick="chooseLanguage('de')">
+                        <span>🇩🇪</span>
+                        <strong>Deutsch</strong>
+                    </button>
+
+                    <button type="button" onclick="chooseLanguage('en')">
+                        <span>🇬🇧</span>
+                        <strong>English</strong>
+                    </button>
+                </div>
+            </div>
+        </div>
+        <div id="voiceModal" class="voice-modal" hidden aria-hidden="true">
+            <div
+                class="voice-modal-card"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="voiceModalTitle"
+                tabindex="-1">
+                <button id="voiceModalClose" class="voice-modal-close" type="button" data-i18n-aria="voice_close" aria-label="Zatvori">×</button>
+                <div class="voice-modal-heading">
+                    <span class="voice-modal-icon" aria-hidden="true">♥</span>
+                    <h2 id="voiceModalTitle" data-i18n="voice_title">Ostavi nam glasovnu poruku ❤️</h2>
+                    <p data-i18n="voice_private_message">Ovu poruku mogu da preslušaju samo mladenci.</p>
+                </div>
+                <div id="voiceInitialFields" class="voice-initial-fields">
+                    <label for="voiceSenderName" data-i18n="voice_sender_label">Od koga je poruka?</label>
+                    <input
+                        id="voiceSenderName"
+                        type="text"
+                        maxlength="60"
+                        autocomplete="name"
+                        data-i18n-placeholder="voice_sender_placeholder"
+                        placeholder="Vaše ime (opciono)" />
+                    <div id="voiceSenderCounter" class="voice-sender-counter">0 / 60</div>
+                </div>
+                <div id="voiceStatus" class="voice-status" role="status" aria-live="polite"></div>
+                <div id="voiceRecordingPanel" class="voice-recording-panel" hidden>
+                    <div class="voice-recording-label"><span class="voice-recording-dot" aria-hidden="true"></span><span data-i18n="voice_recording">Snimanje…</span></div>
+                    <div id="voiceTimer" class="voice-timer">00:00 / 02:00</div>
+                </div>
+                <div id="voicePreviewPanel" class="voice-preview-panel" hidden>
+                    <label for="voicePreview" data-i18n="voice_preview">Preslušajte poruku</label>
+                    <audio id="voicePreview" controls preload="metadata"></audio>
+                </div>
+                <div id="voiceUploadProgress" class="voice-upload-progress" hidden>
+                    <div class="voice-progress-track"><div id="voiceProgressBar" class="voice-progress-bar"></div></div>
+                    <span id="voiceProgressText">0%</span>
+                </div>
+                <div class="voice-modal-actions">
+                    <button id="voiceStartButton" class="voice-action voice-action-primary" type="button" data-i18n="voice_start">Počni snimanje</button>
+                    <button id="voiceStopButton" class="voice-action voice-action-danger" type="button" hidden data-i18n="voice_stop">Zaustavi</button>
+                    <button id="voiceRerecordButton" class="voice-action voice-action-secondary" type="button" hidden data-i18n="voice_rerecord">Snimi ponovo</button>
+                    <button id="voiceSendButton" class="voice-action voice-action-primary" type="button" hidden data-i18n="voice_send">Pošalji</button>
+                    <button id="voiceSuccessClose" class="voice-action voice-action-primary" type="button" hidden data-i18n="voice_close">Zatvori</button>
+                </div>
+            </div>
+        </div>
+        <div
+            id="spinner"
+            class="show w-100 vh-100 bg-white position-fixed translate-middle top-50 start-50 d-flex align-items-center justify-content-center">
+            <div class="spinner-grow text-primary" role="status"></div>
+        </div>
+        <div class="container-fluid sticky-top px-0">
+            <div class="container-fluid">
+                <div class="container px-0">
+                    <nav class="navbar navbar-light navbar-expand-xl" id="navBar">
+                        <a href="index.html" class="navbar-brand">
+                            <span class="text-primary display-6 fw-bold mb-0">
+                                Mrs<strong class="text-secondary">&</strong>Mr
+                            </span>
+                        </a>
+                        <div class="d-flex align-items-center gap-2">
+                            <button
+                                type="button"
+                                onclick="openLanguageModal()"
+                                class="btn btn-light btn-sm language-btn"
+                                aria-label="Izbor jezika">
+                                <span id="currentLanguageFlag">🌐</span>
+                            </button>
+
+                            <button
+                                class="navbar-toggler"
+                                type="button"
+                                data-bs-toggle="collapse"
+                                data-bs-target="#navbarCollapse"
+                                aria-label="Meni">
+                                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                                    <path
+                                        d="M2 5H18M2 10H18M2 15H18"
+                                        stroke="currentColor"
+                                        stroke-width="2"
+                                        stroke-linecap="round" />
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="collapse navbar-collapse py-3" id="navbarCollapse">
+                            <div class="navbar-nav mx-auto border-top">
+                                <a href="#weddingHome" class="nav-item nav-link active" data-i18n="nav_home">Početna</a>
+                                <a href="#weddingAbout" class="nav-item nav-link" data-i18n="nav_couple">Mladenci</a>
+                                <a href="#weddingCountdown" class="nav-item nav-link" data-i18n="nav_countdown"
+                                    >Odbrojavanje</a
+                                >
+                                <a
+                                    href="#"
+                                    onclick="openGallerySection(event)"
+                                    class="nav-item nav-link"
+                                    data-i18n="nav_gallery">
+                                    Galerija
+                                </a>
+                            </div>
+                        </div>
+                    </nav>
+                </div>
+            </div>
+        </div>
+        <div class="container-fluid carousel-header px-0">
+            <div class="hero-single">
+                <img
+                    src="img/carousel-1.jpg"
+                    class="img-fluid"
+                    alt="Bride and Groom"
+                    width="1376"
+                    height="768"
+                    fetchpriority="high"
+                    decoding="async" />
+                <div class="carousel-caption">
+                    <div class="p-3 mx-auto animated zoomIn" style="max-width: 900px">
+                        <div
+                            class="d-inline-block border-end-0 border-start-0 border-secondary p-2 mb-4"
+                            style="border-style: double">
+                            <h4
+                                class="hero-subtitle text-white text-uppercase fw-bold mb-0"
+                                style="letter-spacing: 3px"
+                                data-i18n="welcome">
+                                Dobrodošli na naše venčanje
+                            </h4>
+                        </div>
+                        <h1 class="display-1 text-capitalize text-white mb-3">
+                            Bride <svg class="heart-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 21s-6.716-4.35-9.428-8.06C.29 9.94 1.02 5.9 4.2 4.36 6.6 3.2 9.2 4 10.6 6.02L12 8l1.4-1.98C14.8 4 17.4 3.2 19.8 4.36c3.18 1.54 3.91 5.58 1.63 8.58C18.716 16.65 12 21 12 21z" /></svg> Groom
+                        </h1>
+                        <div
+                            class="d-inline-block border-end-0 border-start-0 border-secondary p-2 mb-5"
+                            style="border-style: double">
+                            <h2 class="h4 text-white text-uppercase fw-bold mb-0" style="letter-spacing: 3px">
+                                <span data-event-date="wedding">Wedding date</span>
+                            </h2>
+                        </div>
+                        <div class="hero-actions">
+                            <a
+                                onclick="openUpload()"
+                                class="btn btn-primary btn-primary-outline-0 wedding-btn"
+                                href="#"
+                                data-i18n="add_memories">
+                                Dodaj uspomene
+                            </a>
+                            <a
+                                class="btn btn-primary btn-primary-outline-0 wedding-btn"
+                                href="#"
+                                onclick="openGallerySection(event)"
+                                data-i18n="gallery_button">
+                                Galerija
+                            </a>
+                            <button
+                                id="voiceMessageButton"
+                                class="btn btn-primary btn-primary-outline-0 wedding-btn voice-hero-button"
+                                type="button">
+                                <span aria-hidden="true">♪</span>
+                                <span data-i18n="voice_button">Ostavi nam glasovnu poruku</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="container-fluid position-relative py-5" id="weddingAbout">
+            <div class="position-absolute" style="top: -35px; right: 0">
+                <img src="img/tamp-bg-1.png" class="img-fluid" alt="" width="200" height="200" loading="lazy" />
+            </div>
+            <div class="position-absolute" style="top: -10px; left: 0; transform: rotate(150deg)">
+                <img src="img/tamp-bg-1.png" class="img-fluid" alt="" width="200" height="200" loading="lazy" />
+            </div>
+            <div class="container position-relative py-5">
+                <div class="mx-auto text-center mb-5 wow fadeInUp" data-wow-delay="0.1s" style="max-width: 800">
+                    <h1 class="text-primary display-1" data-i18n="dear_guests">Dragi naši,</h1>
+                    <h2 class="h4 text-dark mb-0" data-i18n="dear_guests_text">
+                        Zadovoljstvo nam je da današnji dan podelimo sa vama
+                    </h2>
+                </div>
+                <div class="row">
+                    <div class="col-lg-12">
+                        <div class="row g-4 align-items-center">
+                            <div class="col-lg-5 wow fadeInUp" data-wow-delay="0.3s">
+                                <div class="d-flex">
+                                    <div class="text-center my-auto p-0 flex-fill pe-4">
+                                        <h3 class="text-primary mb-3">Bride</h3>
+                                        <p class="text-dark mb-0" style="line-height: 30px" data-i18n="bride_text">
+                                            Lorem Ipsum is simply dummy text of the printing and typesetting industry.
+                                            Lorem Ipsum has been the industry's standard dummy
+                                        </p>
+                                    </div>
+                                    <img src="img/bride.jpg" class="img-fluid img-border" alt="Bride" width="150" height="150" loading="lazy" />
+                                </div>
+                            </div>
+                            <div class="col-lg-2 wow fadeIn" data-wow-delay="0.5s">
+                                <div class="d-flex align-items-center justify-content-center">
+                                    <svg
+                                        class="heart-icon heart-icon-lg"
+                                        viewBox="0 0 24 24"
+                                        fill="currentColor"
+                                        aria-hidden="true">
+                                        <path
+                                            d="M12 21s-6.716-4.35-9.428-8.06C.29 9.94 1.02 5.9 4.2 4.36 6.6 3.2 9.2 4 10.6 6.02L12 8l1.4-1.98C14.8 4 17.4 3.2 19.8 4.36c3.18 1.54 3.91 5.58 1.63 8.58C18.716 16.65 12 21 12 21z" />
+                                    </svg>
+                                </div>
+                            </div>
+                            <div class="col-lg-5 wow fadeInUp" data-wow-delay="0.3s">
+                                <div class="d-flex">
+                                    <img src="img/Groom.jpg" class="img-fluid img-border" alt="Groom" width="150" height="150" loading="lazy" />
+                                    <div class="text-center my-auto ps-4 flex-fill">
+                                        <h3 class="text-primary mb-3">Groom</h3>
+                                        <p class="text-dark mb-0" style="line-height: 30px" data-i18n="groom_text">
+                                            Lorem Ipsum is simply dummy text of the printing and typesetting industry.
+                                            Lorem Ipsum has been the industry's standard dummy
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="container-fluid wedding-date-bg position-relative py-5" id="weddingCountdown">
+            <div class="position-absolute" style="top: -100px; right: 0">
+                <img src="img/tamp-bg-1.png" class="img-fluid" alt="" width="200" height="200" loading="lazy" />
+            </div>
+
+            <div class="position-absolute" style="top: -80px; left: 0; transform: rotate(150deg)">
+                <img src="img/tamp-bg-1.png" class="img-fluid" alt="" width="200" height="200" loading="lazy" />
+            </div>
+
+            <div class="container py-5 wow zoomIn" data-wow-delay="0.1s">
+                <div
+                    class="wedding-date text-center bg-light p-5"
+                    style="border-style: double !important; border: 15px solid rgba(111, 78, 130, 0.5)">
+                    <div class="wedding-date-content">
+                        <div
+                            class="d-inline-block border-end-0 border-start-0 border-secondary p-2 mb-4"
+                            style="border-style: double">
+                            <h4 class="text-dark text-uppercase fw-bold mb-0" style="letter-spacing: 3px">
+                                <span data-event-date="wedding">Wedding date</span>
+                            </h4>
+                        </div>
+
+                        <h1 class="display-5 text-primary mb-5" data-i18n="countdown_title">Odbrojavanje</h1>
+
+                        <div id="countdown-section">
+                            <p id="countdown-status" class="countdown-status" role="status" hidden></p>
+                            <div class="countdown-wrapper">
+                                <div class="countdown-box">
+                                    <div id="days">00</div>
+                                    <span data-i18n="days">Dana</span>
+                                </div>
+
+                                <div class="countdown-box">
+                                    <div id="hours">00</div>
+                                    <span data-i18n="hours">Sati</span>
+                                </div>
+
+                                <div class="countdown-box">
+                                    <div id="minutes">00</div>
+                                    <span data-i18n="minutes">Minuta</span>
+                                </div>
+
+                                <div class="countdown-box">
+                                    <div id="seconds">00</div>
+                                    <span data-i18n="seconds">Sekundi</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div
+                class="position-absolute"
+                style="top: 15%; right: -15px; transform: rotate(320deg); opacity: 0.5; z-index: 1">
+                <img src="img/attendance-bg.png" class="img-fluid" alt="" width="200" height="260" loading="lazy" />
+            </div>
+
+            <div
+                class="position-absolute"
+                style="top: 15%; left: -15px; transform: rotate(-320deg); opacity: 0.5; z-index: 1">
+                <img src="img/attendance-bg.png" class="img-fluid" alt="" width="200" height="260" loading="lazy" />
+            </div>
+        </div>
+        <!-- Gallery Start -->
+        <div class="container-fluid py-5" id="weddingGallery">
+            <div class="container">
+                <div class="text-center mx-auto pb-5" style="max-width: 800px">
+                    <h1 class="text-primary display-1" data-i18n="gallery_title">Galerija uspomena</h1>
+
+                    <p class="text-dark mb-0" data-i18n="gallery_text">
+                        Podelite i pregledajte najlepše trenutke sa našeg venčanja ❤️
+                    </p>
+                </div>
+
+                <!-- JavaScript automatski ubacuje slike ovde -->
+
+                <div class="photo-grid"></div>
+            </div>
+        </div>
+        <!-- Gallery End -->
+        <div class="container-fluid copyright py-4">
+            <div class="container text-center">
+                <span class="copyright-text">&copy; <span id="copyrightYear"></span> Bride &amp; Groom</span>
+                <span class="copyright-divider">|</span>
+                <span>Self-hosted open-source project</span>
+            </div>
+        </div>
+        <a href="#" class="btn btn-primary btn-primary-outline-0 btn-md-square back-to-top" aria-label="Nazad na vrh"
+            ><svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path
+                    d="M12 19V5M5 12l7-7 7 7"
+                    stroke="currentColor"
+                    stroke-width="2.5"
+                    stroke-linecap="round"
+                    stroke-linejoin="round" /></svg
+        ></a>
+
+        <script src="js/translations.js?v=20260822-voice1"></script>
+        <script src="js/language.js?v=20260822-voice1"></script>
+        <script src="js/event-config.js"></script>
+        <script src="js/countdown.js"></script>
+
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.4/jquery.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0/dist/js/bootstrap.bundle.min.js"></script>
+        <script src="lib/wow/wow.min.js"></script>
+        <script src="lib/easing/easing.min.js"></script>
+
+        <script src="js/upload.js"></script>
+        <script src="js/voice-messages.js?v=20260822-voice1"></script>
+        <script src="js/main.js"></script>
+    </body>
+</html>
