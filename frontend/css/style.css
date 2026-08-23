@@ -1,0 +1,643 @@
+/*** Spinner Start ***/
+#spinner {
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity .8s ease-out, visibility 0s linear .5s;
+    z-index: 99999;
+}
+
+#spinner.show {
+    transition: opacity .8s ease-out, visibility 0s linear .0s;
+    visibility: visible;
+    opacity: 1;
+}
+/*** Spinner End ***/
+
+.back-to-top {
+    position: fixed;
+    right: 30px;
+    bottom: 30px;
+    display: flex;
+    width: 45px;
+    height: 45px;
+    align-items: center;
+    justify-content: center;
+    transition: 0.5s;
+    z-index: 99;
+}
+
+/*** Button Start ***/
+.btn {
+    font-weight: 600;
+    transition: .5s;
+}
+
+.btn-md-square {
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: normal;
+}
+
+.btn-primary-outline-0 {
+    color: var(--bs-white) !important;
+    border: 1px solid var(--bs-primary);
+}
+
+.btn-primary-outline-0:hover {
+    filter: brightness(85%);
+    color: var(--bs-white) !important;
+    border: 1px solid var(--bs-primary);
+}
+
+.img-border {
+    border-color: var(--bs-secondary);
+    border-style: double;
+}
+
+.display-1, .display-2, .display-3, .display-4, .display-5, .display-6 {
+    font-family: 'Playfair Display', serif;
+    font-style: italic;
+    font-weight: 700;
+}
+
+/*Language modal*/
+.language-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 999999;
+    background: rgba(0, 0, 0, 0.55);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.language-modal-card {
+    width: 100%;
+    max-width: 420px;
+    background: #ffffff;
+    border-radius: 22px;
+    padding: 34px 26px;
+    text-align: center;
+    box-shadow: 0 25px 80px rgba(0, 0, 0, 0.35);
+}
+
+.language-modal-card h2 {
+    font-family: 'Playfair Display', serif;
+    font-style: italic;
+    font-size: 54px;
+    color: var(--bs-primary);
+    margin-bottom: 5px;
+}
+
+.language-modal-card p {
+    color: #666;
+    margin-bottom: 24px;
+}
+
+.language-options {
+    display: grid;
+    gap: 12px;
+}
+
+.language-options button {
+    border: 1px solid #eee;
+    background: #f8f9fa;
+    border-radius: 14px;
+    padding: 14px 18px;
+    font-size: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    cursor: pointer;
+}
+
+.language-options button span {
+    font-size: 28px;
+}
+
+.language-options button:hover {
+    background: #fff3f3;
+    border-color: var(--bs-primary);
+}
+
+.language-btn {
+    min-width: 44px;
+    height: 44px;
+    font-size: 20px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+/*Language modal*/
+
+/* Dodirna zona hamburger menija - min. 44x44px za mobilnu pristupačnost */
+.navbar-toggler {
+    min-width: 44px;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/*** Navbar Start ***/
+
+.sticky-top {
+    position: fixed !important;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 9999;
+    background: var(--bs-white);
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.08);
+}
+
+/* Da anchor linkovi ne odu ispod navbar-a */
+#weddingHome,
+#weddingAbout,
+#weddingCountdown,
+#weddingGallery {
+    scroll-margin-top: 90px;
+}
+
+.navbar .navbar-nav .nav-link {
+    padding: 10px 15px;
+    font-family: 'Petit Formal Script', cursive;
+    font-weight: 600;
+    font-size: 16px;
+    transition: .5s;
+}
+
+.navbar .navbar-nav .nav-link:hover,
+.navbar .navbar-nav .nav-link.active,
+.sticky-top.bg-white .navbar .navbar-nav .nav-link:hover,
+.sticky-top.bg-white .navbar .navbar-nav .nav-link.active {
+    color: var(--bs-primary);
+}
+
+@media (min-width: 1200px) {
+    .navbar .navbar-collapse .border-top { border-top: none !important; }
+}
+/*** Navbar End ***/
+
+/*** Carousel Start ***/
+.hero-single { position: relative; min-height: 100vh; }
+.hero-single img { position: absolute; width: 100%; height: 100%; object-fit: cover; }
+.hero-single .carousel-caption {
+    width: 100%; height: 100%; position: absolute; top: 0; left: 0;
+    display: flex; align-items: center; justify-content: end; text-align: center;
+    background: linear-gradient(rgba(0, 0, 0, .6), rgba(0, 0, 0, 0.6));
+}
+.hero-single .carousel-caption h1,
+.hero-single .carousel-caption h4 {
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.55);
+}
+.hero-subtitle {
+    font-family: 'Cinzel', serif;
+    font-weight: 600;
+}
+.event-info-unavailable {
+    display: inline-block;
+    max-width: min(680px, 88vw);
+    font-family: 'Cinzel', serif;
+    font-style: normal;
+    font-weight: 600;
+    font-size: clamp(0.8rem, 1.8vw, 1.15rem);
+    line-height: 1.55;
+    letter-spacing: 0.04em;
+    text-align: center;
+    text-transform: uppercase;
+    white-space: pre-line;
+    overflow-wrap: break-word;
+}
+.heart-icon {
+    color: #D62839 !important;
+    width: 1em;
+    height: 1em;
+    vertical-align: -0.125em;
+}
+.heart-icon-lg {
+    width: 80px;
+    height: 80px;
+}
+/*** Carousel End ***/
+
+/* ========================================
+   SVADBENA DUGMAD
+======================================== */
+.wedding-btn {
+    width: 280px; height: 70px; display: flex; align-items: center; justify-content: center;
+    padding: 0 !important; font-size: 20px; font-weight: 600; border-radius: 12px; transition: all 0.3s ease;
+}
+.wedding-btn:hover { transform: translateY(-2px); }
+
+@media (max-width: 576px) {
+    .wedding-btn { width: 220px; height: 60px; font-size: 18px; }
+}
+
+/*** Wedding Story Start ***/
+.flex-fill {
+    flex: 1 1 auto !important;
+}
+
+@media (max-width: 768px) {
+    /* FIX ZA MOBILNI */
+    #weddingAbout .position-absolute { top: 0 !important; }
+    #weddingAbout .position-absolute[style*="rotate"] { top: 40px !important; }
+    #weddingAbout .mx-auto.text-center { margin-top: 180px !important; }
+    #weddingAbout .d-flex { flex-direction: column !important; text-align: center !important; gap: 20px; }
+    #weddingAbout .pe-4, #weddingAbout .ps-4 { padding: 0 !important; }
+    .heart-icon-lg { width: 48px !important; height: 48px !important; margin: 20px 0; }
+    .img-border { max-width: 250px; margin: 0 auto; }
+}
+
+#weddingAbout { overflow: hidden; }
+/*** Wedding Story End ***/
+
+/*** Wedding Date Start ***/
+.wedding-date-bg .wedding-date {
+    width: 100%; position: relative; overflow: hidden; background-size: cover;
+    background: linear-gradient(rgba(255,255,255,0.88), rgba(255,255,255,0.88)), url(../img/wedding-bg.png) center center;
+}
+.wedding-date-content h1,
+.wedding-date-content h4 {
+    position: relative;
+    z-index: 2;
+    text-shadow: 0 0 12px rgba(255, 255, 255, 0.95), 0 0 4px rgba(255, 255, 255, 0.95);
+}
+.wedding-date-content h1[data-i18n="countdown_title"] {
+    font-family: 'Cinzel', serif;
+    font-style: normal;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    transform: translateX(-3px);
+}
+/*** Wedding Date End ***/
+
+/* COUNTDOWN */
+.countdown-wrapper { display: flex; justify-content: center; align-items: center; gap: 40px; margin-bottom: 40px; }
+.countdown-box { text-align: center; min-width: 90px; }
+.countdown-box div { font-size: 48px; font-weight: 700; line-height: 1; color: var(--bs-primary); }
+.countdown-status {
+    max-width: 680px;
+    margin: 0 auto;
+    color: #5f5265;
+    font-family: 'Cinzel', serif;
+    font-style: normal;
+    font-size: clamp(0.85rem, 1.8vw, 1.05rem);
+    font-weight: 600;
+    line-height: 1.65;
+    letter-spacing: 0.025em;
+    text-align: center;
+    white-space: pre-line;
+    overflow-wrap: break-word;
+}
+.countdown-box span { display: block; margin-top: 10px; font-size: 18px; color: #444; }
+
+@media (max-width: 992px) {
+    .countdown-wrapper { gap: 25px; }
+    .countdown-box { min-width: 70px; }
+    .countdown-box div { font-size: 36px; }
+}
+
+@media (max-width: 576px) {
+    .countdown-wrapper { gap: 10px; }
+    .countdown-box { min-width: 55px; }
+    .countdown-box div { font-size: 26px; }
+    .countdown-box span { font-size: 13px; }
+    .wedding-date-content h1 { font-size: 2.5rem !important; }
+}
+
+@media (max-width: 380px) {
+    .countdown-wrapper { gap: 6px; }
+    .countdown-box { min-width: 48px; }
+    .countdown-box div { font-size: 22px; }
+    .countdown-box span { font-size: 11px; }
+}
+
+/*** Gallery Start ***/
+
+/* Predugačke reči (npr. nemački "Erinnerungsgalerie") da se prelome umesto da se seku */
+[data-i18n="gallery_title"] {
+    overflow-wrap: break-word;
+    word-break: break-word;
+}
+
+/* Glavni grid za javnu galeriju */
+.photo-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 2px;
+}
+
+/* Svaki element galerije: slika ili video thumbnail */
+.gallery-item {
+    position: relative;
+    aspect-ratio: 1 / 1;
+    overflow: hidden;
+}
+
+/* Link unutar galerije zauzima celu kocku */
+.gallery-item a {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+/* Slike i video thumbnail-i se prikazuju kao kvadrat */
+.gallery-item img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform .2s ease;
+}
+
+/* Blagi zoom efekat na hover */
+.gallery-item a:hover img {
+    transform: scale(1.05);
+}
+
+/* Play oznaka za video thumbnail */
+.video-play-badge {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+
+    width: 54px;
+    height: 54px;
+    border-radius: 50%;
+
+    background: rgba(0, 0, 0, 0.65);
+    color: #fff;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    font-size: 24px;
+    line-height: 1;
+    pointer-events: none;
+
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+/*Like dugme*/
+.photo-like-badge {
+    position: absolute;
+    right: 8px;
+    bottom: 8px;
+
+    border: none;
+    border-radius: 999px;
+
+    background: rgba(0, 0, 0, 0.75);
+    color: #ffffff;
+
+    padding: 6px 10px;
+
+    font-size: 13px;
+    font-weight: 600;
+
+    z-index: 20;
+
+    cursor: pointer;
+    backdrop-filter: blur(6px);
+}
+
+.photo-like-badge:hover {
+    background: rgba(0, 0, 0, 0.88);
+}
+
+.photo-like-badge.liked {
+    background: rgba(220, 53, 69, 0.9);
+}
+/*Like dugme*/
+
+/* Na telefonu malo manja play ikonica */
+@media (max-width: 576px) {
+    .video-play-badge {
+        width: 44px;
+        height: 44px;
+        font-size: 20px;
+    }
+}
+
+/* Broj kolona na tabletima */
+@media (min-width: 768px) {
+    .photo-grid {
+        grid-template-columns: repeat(4, 1fr);
+    }
+}
+
+/* Broj kolona na desktopu */
+@media (min-width: 1200px) {
+    .photo-grid {
+        grid-template-columns: repeat(6, 1fr);
+    }
+}
+
+/*** Gallery End ***/
+
+/*Upload slika progres*/
+#uploadStatusBox {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    z-index: 999999;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.upload-status-card {
+    width: 100%;
+    max-width: 420px;
+    background: #ffffff;
+    border-radius: 18px;
+    padding: 28px;
+    text-align: center;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+}
+
+#uploadStatusText {
+    font-size: 18px;
+    font-weight: 600;
+    color: #222;
+    margin-bottom: 18px;
+}
+
+.upload-progress {
+    width: 100%;
+    height: 12px;
+    background: #e9ecef;
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+#uploadProgressBar {
+    height: 100%;
+    width: 0%;
+    background: var(--bs-primary);
+    border-radius: 999px;
+    transition: width 0.25s ease;
+}
+
+/*Upload slika progres*/
+
+/*Upravo vencani*/
+.newly-married-message {
+    text-align: center;
+    font-size: 72px;
+    font-family: "Playfair Display", serif;
+    font-style: italic;
+    color: var(--bs-primary);
+    padding: 40px 20px;
+}
+
+@media (max-width: 768px) {
+    .newly-married-message {
+        font-size: 42px;
+    }
+}
+/*Upravo vencani*/
+
+/*Pop up*/
+#infoPopupBox {
+    position: fixed;
+    inset: 0;
+    z-index: 999999;
+    background: rgba(0, 0, 0, 0.55);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.info-popup-card {
+    width: 100%;
+    max-width: 420px;
+    background: #ffffff;
+    border-radius: 22px;
+    padding: 32px 26px;
+    text-align: center;
+    box-shadow: 0 25px 80px rgba(0, 0, 0, 0.35);
+}
+
+.info-popup-card h3 {
+    font-family: "Playfair Display", serif;
+    font-style: italic;
+    font-size: 42px;
+    color: #2f2f2f;
+    margin-bottom: 14px;
+}
+
+.info-popup-card p {
+    font-size: 17px;
+    color: #444;
+    margin-bottom: 24px;
+}
+
+.info-popup-card button {
+    border: none;
+    background: var(--bs-primary);
+    color: #ffffff;
+    padding: 12px 26px;
+    border-radius: 999px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.info-popup-card button:hover {
+    filter: brightness(85%);
+}
+/*Pop up*/
+
+
+.copyright {
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    background: var(--bs-dark) !important;
+}
+.copyright-text {
+    color: rgba(255, 255, 255, 0.65);
+    font-size: 14px;
+    letter-spacing: 0.3px;
+}
+.copyright-divider {
+    color: rgba(255, 255, 255, 0.25);
+    margin: 0 12px;
+}
+.copyright-link {
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 14px;
+    font-weight: 500;
+    text-decoration: none;
+    transition: color 0.3s ease;
+}
+.copyright-link i {
+    margin-right: 6px;
+}
+.copyright-link:hover {
+    color: var(--bs-primary);
+}
+@media (max-width: 576px) {
+    .copyright-divider { display: none; }
+    .copyright-text, .copyright-link { display: block; }
+    .copyright-link { margin-top: 8px; }
+}
+
+html, body { max-width: 100%; overflow-x: hidden; margin: 0; padding: 0; }
+
+/* Voice recorder */
+.hero-actions { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 12px; }
+.voice-hero-button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+.voice-modal[hidden] { display: none; }
+.voice-modal { position: fixed; inset: 0; z-index: 100001; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(35, 23, 43, .72); backdrop-filter: blur(5px); }
+.voice-modal-card { position: relative; width: min(100%, 520px); max-height: calc(100dvh - 32px); overflow-y: auto; padding: 34px 30px 28px; border: 1px solid rgba(111, 78, 130, .25); border-radius: 22px; background: #fffafc; box-shadow: 0 24px 70px rgba(30, 17, 37, .35); color: #33293a; outline: none; }
+.voice-modal-close { position: absolute; top: 10px; right: 12px; width: 44px; height: 44px; border: 0; border-radius: 50%; background: transparent; color: #6f4e82; font-size: 30px; line-height: 1; }
+.voice-modal-close:hover, .voice-modal-close:focus-visible { background: rgba(111, 78, 130, .1); }
+.voice-modal-heading { padding: 0 26px; text-align: center; }
+.voice-modal-icon { color: #b77786; font-size: 28px; }
+.voice-modal-heading h2 { margin: 4px 0 8px; color: #6f4e82; font-family: "Playfair Display", serif; font-size: clamp(25px, 6vw, 34px); }
+.voice-modal-heading p { margin-bottom: 24px; color: #6d6372; }
+.voice-initial-fields label, .voice-preview-panel label { display: block; margin-bottom: 8px; font-weight: 600; }
+.voice-initial-fields input { width: 100%; min-height: 48px; padding: 10px 13px; border: 1px solid #d8cbdc; border-radius: 12px; background: #fff; }
+.voice-initial-fields input:focus { border-color: #6f4e82; box-shadow: 0 0 0 3px rgba(111, 78, 130, .12); outline: none; }
+.voice-sender-counter { margin-top: 5px; color: #827787; font-size: 12px; text-align: right; }
+.voice-status { min-height: 24px; margin: 16px 0 8px; color: #675c6d; text-align: center; }
+.voice-status.is-error { color: #a3263f; }
+.voice-status.is-success { color: #337558; font-weight: 600; }
+.voice-recording-panel { padding: 18px; border-radius: 16px; background: #fff0f3; text-align: center; }
+.voice-recording-label { display: flex; align-items: center; justify-content: center; gap: 9px; color: #9d2942; font-weight: 700; }
+.voice-recording-dot { width: 11px; height: 11px; border-radius: 50%; background: #c92f4d; animation: voicePulse 1.3s infinite; }
+.voice-timer { margin-top: 8px; color: #4c3e50; font-size: 26px; font-variant-numeric: tabular-nums; }
+@keyframes voicePulse { 50% { opacity: .35; transform: scale(.85); } }
+.voice-preview-panel { margin-top: 15px; }
+.voice-preview-panel audio { display: block; width: 100%; max-width: 100%; }
+.voice-modal-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 20px; }
+.voice-action { min-height: 48px; padding: 10px 14px; border: 0; border-radius: 999px; font-weight: 700; transition: transform .2s, opacity .2s; }
+.voice-action:hover:not(:disabled) { transform: translateY(-1px); }
+.voice-action:disabled { cursor: wait; opacity: .62; }
+.voice-action-primary { grid-column: 1 / -1; background: #6f4e82; color: #fff; }
+.voice-action-secondary { border: 1px solid #6f4e82; background: #fff; color: #6f4e82; }
+.voice-action-danger { grid-column: 1 / -1; background: #a62c45; color: #fff; }
+.voice-upload-progress { display: flex; align-items: center; gap: 10px; margin-top: 16px; }
+.voice-progress-track { flex: 1; height: 8px; overflow: hidden; border-radius: 999px; background: #eadfeb; }
+.voice-progress-bar { width: 0; height: 100%; background: #6f4e82; transition: width .2s; }
+body.voice-modal-open { overflow: hidden; }
+@media (max-width: 576px) {
+    .hero-actions { flex-direction: column; gap: 10px; }
+    .voice-modal { align-items: flex-end; padding: 0; }
+    .voice-modal-card { width: 100%; max-height: 92dvh; padding: 30px 18px 22px; border-radius: 22px 22px 0 0; }
+    .voice-modal-heading { padding: 0 18px; }
+    .voice-modal-actions { grid-template-columns: 1fr; }
+    .voice-action { grid-column: 1; width: 100%; min-height: 50px; }
+}
+@media (prefers-reduced-motion: reduce) { .voice-recording-dot { animation: none; } }

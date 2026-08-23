@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="sr">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <title>Wedding Admin Login</title>
+
+    <link href="css/bootstrap.min.css" rel="stylesheet">
+
+    <style>
+
+        body{
+            background:#f5f5f5;
+            font-family:Arial, Helvetica, sans-serif;
+        }
+
+        .login-card{
+
+            max-width:420px;
+            margin:120px auto;
+            padding:35px;
+
+            background:#ffffff;
+
+            border-radius:16px;
+
+            box-shadow:0 12px 35px rgba(0,0,0,.15);
+
+        }
+
+        .login-card h2{
+
+            color:#222;
+            font-weight:700;
+            text-align:center;
+            margin-bottom:30px;
+
+        }
+
+        .login-card label{
+
+            color:#222;
+            font-weight:600;
+            margin-bottom:6px;
+
+        }
+
+        .login-card input{
+
+            height:50px;
+
+            border-radius:8px;
+
+            border:1px solid #bdbdbd;
+
+            background:#ffffff !important;
+
+            color:#000 !important;
+
+            -webkit-text-fill-color:#000 !important;
+
+            font-size:16px;
+
+            font-weight:500;
+
+        }
+
+        .login-card input::placeholder{
+
+            color:#777;
+
+        }
+
+        .login-card input:focus{
+
+            color:#000 !important;
+
+            background:#ffffff !important;
+
+            -webkit-text-fill-color:#000 !important;
+
+            border-color:#555;
+
+            box-shadow:none;
+
+        }
+
+        .login-card input:-webkit-autofill,
+        .login-card input:-webkit-autofill:hover,
+        .login-card input:-webkit-autofill:focus,
+        .login-card input:-webkit-autofill:active{
+
+            -webkit-box-shadow:0 0 0 1000px #ffffff inset !important;
+
+            -webkit-text-fill-color:#000 !important;
+
+            transition:background-color 9999s ease-in-out 0s;
+
+        }
+
+        .btn-login{
+
+            width:100%;
+
+            height:48px;
+
+            border-radius:8px;
+
+            font-weight:600;
+
+            font-size:18px;
+
+        }
+
+        #error{
+
+            margin-top:20px;
+
+            text-align:center;
+
+            color:#dc3545;
+
+            font-weight:600;
+
+        }
+
+    </style>
+
+</head>
+
+<body>
+
+<div class="login-card">
+
+    <h2>Wedding Admin</h2>
+
+    <form id="loginForm">
+
+        <div class="mb-3">
+
+            <label for="username">
+                Username
+            </label>
+
+            <input
+                id="username"
+                class="form-control"
+                placeholder="Enter username"
+                autocomplete="username"
+                required>
+
+        </div>
+
+        <div class="mb-4">
+
+            <label for="password">
+                Password
+            </label>
+
+            <input
+                id="password"
+                type="password"
+                class="form-control"
+                placeholder="Enter password"
+                autocomplete="current-password"
+                required>
+
+        </div>
+
+        <button
+            type="submit"
+            class="btn btn-dark btn-login">
+
+            Login
+
+        </button>
+
+    </form>
+
+    <div id="error"></div>
+
+</div>
+
+<script src="js/login.js"></script>
+
+</body>
+
+</html>

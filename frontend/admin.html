@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="sr">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Admin galerija</title>
+
+        <link href="css/bootstrap.min.css" rel="stylesheet" />
+        <link href="css/admin.css?v=20260822-voice1" rel="stylesheet" />
+    </head>
+
+    <body>
+        <div class="container py-5">
+            <div class="admin-header">
+                <div>
+                    <h1>Admin galerija</h1>
+                    <p>Pregled, statistika, odobravanje, sakrivanje i brisanje fotografija i video snimaka.</p>
+                </div>
+
+                <div class="admin-actions">
+                    <a href="/api/admin/download/photos" class="btn btn-success"> 📦 Preuzmi fotografije </a>
+
+                    <a href="/api/admin/download/videos" class="btn btn-primary"> 🎬 Preuzmi snimke </a>
+
+                    <button class="btn btn-dark" onclick="refreshAdmin()">Osveži</button>
+
+                    <button class="btn btn-outline-danger" onclick="logout()">Log out</button>
+                </div>
+            </div>
+
+            <div id="adminSectionTabs" class="admin-tabs mb-4" hidden>
+                <button id="mediaTabButton" class="admin-tab is-active" type="button">Fotografije i snimci</button>
+                <button id="voiceTabButton" class="admin-tab" type="button">Glasovne poruke</button>
+            </div>
+
+            <section id="mediaAdminSection">
+            <div class="stats-grid mb-4">
+                <div class="stat-card">
+                    <span>Ukupno fajlova</span>
+                    <strong id="statTotal">0</strong>
+                </div>
+
+                <div class="stat-card">
+                    <span>Odobreno</span>
+                    <strong id="statApproved">0</strong>
+                </div>
+
+                <div class="stat-card stat-card-pending">
+                    <span>Na pregledu</span>
+                    <strong id="statPending">0</strong>
+                </div>
+
+                <div class="stat-card">
+                    <span>Sakriveno</span>
+                    <strong id="statHidden">0</strong>
+                </div>
+
+                <div class="stat-card">
+                    <span>Preuzimanja</span>
+                    <strong id="statDownloads">0</strong>
+                </div>
+            </div>
+
+            <div id="adminGallery" class="admin-grid"></div>
+            </section>
+
+            <section id="voiceAdminSection" hidden>
+                <div class="voice-admin-toolbar mb-4">
+                    <div>
+                        <h2>Glasovne poruke</h2>
+                        <p>Privatne poruke gostiju koje mogu da preslušaju samo mladenci.</p>
+                    </div>
+                    <div class="admin-actions">
+                        <a href="/api/couple/voice-messages/download" class="btn btn-success">Preuzmi sve</a>
+                        <button id="refreshVoiceButton" class="btn btn-dark" type="button">Osveži</button>
+                    </div>
+                </div>
+                <div class="voice-stats-grid mb-4">
+                    <div class="stat-card"><span>Ukupno</span><strong id="voiceStatTotal">0</strong></div>
+                    <div class="stat-card stat-card-new"><span>Nove</span><strong id="voiceStatNew">0</strong></div>
+                    <div class="stat-card"><span>Spremne</span><strong id="voiceStatReady">0</strong></div>
+                    <div class="stat-card"><span>U obradi</span><strong id="voiceStatProcessing">0</strong></div>
+                    <div class="stat-card stat-card-failed"><span>Neuspešne</span><strong id="voiceStatFailed">0</strong></div>
+                </div>
+                <div id="voiceMessagesList" class="voice-admin-list" aria-live="polite"></div>
+                <div class="voice-load-more-wrap">
+                    <button id="voiceLoadMoreButton" class="btn btn-outline-dark" type="button" hidden>Učitaj još</button>
+                </div>
+            </section>
+        </div>
+
+        <script src="js/admin.js?v=20260822-voice1"></script>
+    </body>
+</html>
