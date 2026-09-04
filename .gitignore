@@ -149,6 +149,13 @@ CP*-CLEANUP-*.txt
 # Local image optimization/source exports; public demo assets live directly in frontend/img
 frontend/img/originals/
 frontend/img/*.webp
+!frontend/img/carousel-1.webp
+!frontend/img/carousel-1-mobile.webp
+!frontend/img/tamp-bg-1.webp
+!frontend/img/bride.webp
+!frontend/img/Groom.webp
+!frontend/img/attendance-bg.webp
+!frontend/img/wedding-bg.webp
 frontend/img/Gemini_Generated_Image_*.jpg
 frontend/img/carousel-11.jpg
 
