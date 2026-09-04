@@ -1,0 +1,22 @@
+[Unit]
+Description=Wedding Photo Sharing Platform backend
+After=network.target
+
+[Service]
+Type=simple
+User=wedding
+Group=wedding
+WorkingDirectory=/opt/wedding-app/backend
+Environment=NODE_ENV=production
+EnvironmentFile=/opt/wedding-app/backend/.env
+ExecStart=/usr/bin/node /opt/wedding-app/backend/dist/server.js
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=180
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/opt/wedding-app/uploads /opt/wedding-app/database.sqlite /opt/wedding-app/sessions.sqlite /var/lib/wedding-app/voice-messages
+
+[Install]
+WantedBy=multi-user.target

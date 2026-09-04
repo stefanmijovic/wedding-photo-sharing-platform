@@ -1,0 +1,191 @@
+# ==========================
+
+# Cleanup backups (staged deletions, safe to purge)
+
+# ==========================
+
+_cleanup-backup/
+
+# ==========================
+
+# Node.js dependencies
+
+# ==========================
+
+node_modules/
+
+# ==========================
+
+# Package manager logs
+
+# ==========================
+
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ==========================
+
+# Environment variables
+
+# ==========================
+
+.env
+.env.*
+!.env.example
+
+# ==========================
+
+# Build output and coverage
+
+# ==========================
+
+dist/
+backend/dist/
+coverage/
+
+# ==========================
+
+# Databases and sessions
+
+# ==========================
+
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.sqlite-journal
+*.sqlite.backup*
+*.db
+*.db-shm
+*.db-wal
+sessions.sqlite
+sessions.sqlite-*
+
+# ==========================
+
+# User uploads
+
+# ==========================
+
+uploads/*
+!uploads/original/
+!uploads/thumbs/
+uploads/original/*
+uploads/thumbs/*
+!uploads/original/.gitkeep
+!uploads/thumbs/.gitkeep
+voice-messages/
+private-media/
+processed-media/
+thumbnails/
+
+# ==========================
+
+# Logs
+
+# ==========================
+
+*.log
+logs/
+
+# ==========================
+
+# Temporary and backup files
+
+# ==========================
+
+*~
+*.tmp
+*.temp
+*.bak
+*.swp
+*.swo
+*.orig
+*.backup*
+*.backup-before*
+backend/*.backup*
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.7z
+*.dump
+*.dmp
+
+# ==========================
+
+# Load testing
+
+# ==========================
+
+load-test/
+tmp/
+temp/
+cache/
+.cache/
+
+# ==========================
+
+# Project notes and local copies
+
+# ==========================
+
+struktura.txt
+frontend/index - Copy.html
+frontend/Untitled-2
+
+# Local Codex handoffs and operational work products
+CODEX-HANDOFF-*.md
+CP*-CLEANUP-*.txt
+/ops/
+/test/
+
+# Local infrastructure/performance checks that depend on private host fixtures
+/backend/test/phase2e-nginx-static.test.mjs
+/backend/test/phase1g-config-static.test.mjs
+/backend/test/image-pipeline-performance.test.mjs
+
+# Local image optimization/source exports; public demo assets live directly in frontend/img
+frontend/img/originals/
+frontend/img/*.webp
+frontend/img/Gemini_Generated_Image_*.jpg
+frontend/img/carousel-11.jpg
+
+# ==========================
+
+# Unused template files
+
+# ==========================
+
+frontend/lib/waypoints/links.php
+frontend/LICENSE.txt
+frontend/READ-ME.txt
+
+# ==========================
+
+# Bootstrap source files
+
+# ==========================
+
+frontend/scss/
+
+# ==========================
+
+# IDE and editor settings
+
+# ==========================
+
+.vscode/
+.idea/
+*.code-workspace
+
+# ==========================
+
+# Operating system files
+
+# ==========================
+
+.DS_Store
+Thumbs.db
+Desktop.ini
