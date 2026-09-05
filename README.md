@@ -81,7 +81,7 @@ See [Architecture](docs/ARCHITECTURE.md) for component and data-flow details.
 ## Quick start
 
 ```bash
-git clone https://github.com/your-username/wedding-photo-sharing-platform.git
+git clone https://github.com/stefanmijovic/wedding-photo-sharing-platform.git
 cd wedding-photo-sharing-platform/backend
 cp .env.example .env
 npm ci
@@ -139,10 +139,12 @@ Images are validated, normalized, resized, and moderated. Videos and voice messa
 
 ```bash
 cd backend
+npm run build
 npm test
+node --test test/frontend-performance.test.mjs
 ```
 
-The suite covers event locking, likes, processing queue behavior, video retry/recovery, and voice-message authorization/upload/stream/delete flows. Tests isolate runtime data through `TEST_DATA_ROOT`. See [Testing](docs/TESTING.md).
+The suite covers event locking, likes, processing queue behavior, frontend performance, video retry/recovery, and voice-message authorization/upload/stream/delete flows. Tests isolate runtime data through `TEST_DATA_ROOT`. See [Testing](docs/TESTING.md).
 
 ## Production deployment
 
