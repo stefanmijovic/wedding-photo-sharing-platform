@@ -36,7 +36,7 @@
     "@types/express": "^5.0.6",
     "@types/express-session": "^1.19.0",
     "@types/multer": "^2.1.0",
-    "@types/node": "^25.9.3",
+    "@types/node": "^26.4.1",
     "autocannon": "^8.0.0",
     "nodemon": "^3.1.14",
     "tsx": "^4.22.4",
